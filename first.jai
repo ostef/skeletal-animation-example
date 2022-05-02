@@ -2,11 +2,13 @@
 #import "String";
 #import "Compiler";
 #import "File";
+#import "File_Utilities";
 #import "Process";
 
 OUTPUT_NAME :: "anim";
 OUTPUT_DIR  :: "bin/";
 INT_DIR     :: "int/";
+DATA_DIR    :: "data/";
 
 build :: ()
 {
@@ -50,12 +52,16 @@ build :: ()
 	}
 	compiler_end_intercept (ws);
 
-	if build_success && run_on_success
+	if build_success
 	{
-		cmd := join (OUTPUT_DIR, OUTPUT_NAME);
-		print ("Running %.\n", cmd);
-		if !os_run_command (cmd, working_directory = OUTPUT_DIR, print_captured_output = true)
-			print ("Could not run %.\n", cmd);
+		copy_directory (DATA_DIR, join (OUTPUT_DIR, DATA_DIR));
+		if run_on_success
+		{
+			cmd := join (OUTPUT_DIR, OUTPUT_NAME);
+			print ("Running %.\n", cmd);
+			if !os_run_command (cmd, working_directory = OUTPUT_DIR, print_captured_output = true)
+				print ("Could not run %.\n", cmd);
+		}
 	}
 
 	// Set the build options of this metaprogram workspace to not output anything.
@@ -63,3 +69,23 @@ build :: ()
 }
 
 #run build ();
+
+copy_directory :: (source : string, dest : string)
+{
+	names : [2]string;
+	names[0] = source;
+	names[1] = dest;
+
+	visitor :: (info : *File_Visit_Info, names : [2]string)
+	{
+		dest_name := advance (info.full_name, names[0].count);
+		dest_name = join (names[1], dest_name);
+		if info.is_directory
+			make_directory_if_it_does_not_exist (dest_name);
+		else
+			copy_file (info.full_name, dest_name);
+	}
+
+	make_directory_if_it_does_not_exist (dest);
+	visit_files (source, true, names, visitor, visit_directories = true);
+}
