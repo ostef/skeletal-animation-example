@@ -137,7 +137,7 @@ class Mesh:
 			for joint in self.joints:
 				fw (b"%s\n" % bytes (joint.name, 'UTF-8'))
 				if joint.parent is not None:
-					local_transform = joint.parent.matrix_local.inverted () @ joint.matrix_local
+					local_transform = joint.matrix_local @ joint.parent.matrix_local.inverted ()
 				else:
 					local_transform = joint.matrix_local
 				fw (b"%.6f %.6f %.6f %.6f\n" % local_transform[0][:])
@@ -154,15 +154,14 @@ class Mesh:
 						if i != 0:
 							fw (b" ")
 						fw (b"%u" % self.name_to_joint_id[child.name])
-				fw (b"\n")
-			fw (b"\n")
+				fw (b"\n\n")
 			fw (b"vertices:\n")
 			for vert in self.verts:
 				fw (b"%.6f %.6f %.6f\n" % vert.position)
 				fw (b"%.6f %.6f %.6f\n" % vert.normal)
 				fw (b"%.6f %.6f %.6f\n" % vert.weights)
 				fw (b"%i %i %i %i\n" % vert.joint_ids)
-			fw (b"\n")
+				fw (b"\n")
 			fw (b"triangles:\n")
 			for tri in self.tris:
 				fw (b"%u %u %u\n" % tuple (tri))
@@ -174,6 +173,8 @@ def export_meshes (
 	apply_transform : bool,
 	axis_conversion_matrix : mathutils.Matrix
 ):
+	import os
+
 	if bpy.ops.object.mode_set.poll ():
 		bpy.ops.object.mode_set (mode = 'OBJECT')
 	if use_selection:
@@ -207,9 +208,10 @@ def export_meshes (
 		bm.free ()
 
 		result = Mesh.from_mesh_and_armature (obj, me, armature)
-		result.write_text (filename)
+		output_filename = os.path.join (os.path.dirname (filename), obj.name) + Exporter.filename_ext
+		result.write_text (output_filename)
 		obj.to_mesh_clear ()
-		print (f"Exported mesh {obj.name} to file {filename}.\n")
+		print (f"Exported mesh {obj.name} to file {output_filename}.\n")
 
 # By default, we use -Z forward because even though our coordinate system
 # uses Z forward and Y up, our meshes face backwards in blender because
@@ -218,7 +220,7 @@ def export_meshes (
 class Exporter (bpy.types.Operator, ExportHelper):
 	"""Export mesh data"""
 	bl_idname = "export.anim_example_mesh"
-	bl_label = "Export Mesh with skinning (.mesh)"
+	bl_label = "Export mesh with skinning (.mesh)"
 	bl_options = { 'REGISTER', 'UNDO' }
 	filename_ext = ".mesh"
 
