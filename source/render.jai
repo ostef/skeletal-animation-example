@@ -152,7 +152,7 @@ draw_skeleton :: (using skeleton : Skeleton, transform : Matrix4, color : Vector
 	draw_joint :: (joint : *Joint, transform : Matrix4, color : Vector4) -> joint_position : Vector3
 	{
 		model_space_transform := inverse (joint.inverse_bind_transform);
-		world_space_transform := model_space_transform * transform;
+		world_space_transform := transform * model_space_transform;
 		start := xyz (
 			world_space_transform._14,
 			world_space_transform._24,
@@ -177,7 +177,7 @@ draw_pose :: (pose : Skeleton_Pose, transform : Matrix4, color : Vector4)
 	draw_joint :: (pose : Skeleton_Pose, joint : *Skeleton.Joint, transform : Matrix4, color : Vector4) -> joint_position : Vector3
 	{
 		joint_pose := *pose.joints[joint.id];
-		world_space_transform := joint_pose.model_space_transform * transform;
+		world_space_transform := transform * joint_pose.model_space_transform;
 		start := xyz (
 			world_space_transform._14,
 			world_space_transform._24,
