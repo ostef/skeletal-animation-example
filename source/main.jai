@@ -38,35 +38,24 @@ handle_window_event :: (event : Event)
 		if event.key_pressed
 		{
 			if event.key_code == .ESCAPE
-				g_control_camera = !g_control_camera;
+				set_camera_control (!g_control_camera);
 			if event.key_code == .F4 && event.alt_pressed
 				g_running = false;
 		}
 	}
 }
 
-is_key_down :: inline (key : Key_Code) -> bool #must
+set_camera_control :: inline (control : bool)
 {
-	return (input_button_states[cast (s64) key] & .DOWN) != 0;
+	g_control_camera = control;
+	if g_control_camera
+		hide_cursor ();
+	else
+		show_cursor ();
 }
 
-decompose_transform :: inline (mat : Matrix4) -> translation : Vector3, rotation : Quaternion, scale : Vector3
-{
-	translation := xyz (
-		mat._14,
-		mat._24,
-		mat._34
-	);
-	rotation := get_rotation (mat);
-	scale := xyz (
-		mat._11,
-		mat._22,
-		mat._33
-	);
-
-	return translation, rotation, scale;
-}
-
+// Simp also has an init_fonts routine, but it's fine to define
+// our own because we namespace the module when importing it!
 init_fonts :: ()
 {
 	g_font = simp.get_font_at_size ("data", "OpenSans-Regular.ttf", 22);
@@ -105,7 +94,7 @@ main :: ()
 	g_anim.sample_count -= 4;
 	g_camera.position = xyz (0, 1, 4);
 	g_running = true;
-	delta_time := 0.1667;
+	delta_time := 0.01667;
 	pose := make_pose_for_skeleton (*mesh);
 	while g_running
 	{
@@ -117,6 +106,14 @@ main :: ()
 		for events_this_frame
 			handle_window_event (it);
 		
+		if !input_application_has_focus && g_control_camera
+			set_camera_control (false);
+		if g_control_camera
+		{
+			x, y, w, h := get_dimensions (g_window, false);
+			set_mouse_pointer_position (w / 2, h / 2);
+		}
+
 		update_flying_camera (*g_camera, delta_time);
 		reset_to_bind_pose (*pose);
 		sample_animation (g_anim, g_params.animation_time, *pose);
@@ -135,17 +132,87 @@ main :: ()
 		draw_line (xyz (0, 0, 0), xyz (0, 0, -1), xyzw (0, 0, 1, 1));
 		if g_params.show_skeleton
 		{
+			// Disable depth mask and testing so we can see
+			// the skeleton through other drawn stuff
 			glDepthMask (GL_FALSE);
 			glDisable (GL_DEPTH_TEST);
 			draw_pose (pose, Matrix4_Identity, xyzw (g_params.skeleton_color, 1));
 		}
 		
-		if !g_control_camera
-			update_ui (delta_time);
+		update_ui (delta_time);
 
 		swap_buffers (g_window);
 		sleep_milliseconds (10);
 		frame_end := current_time_monotonic ();
 		delta_time = cast (float) to_float64_seconds (frame_end - frame_start);
 	}
+}
+
+// Things that we define ourselves but they probably should be
+// added to the appropriate modules:
+
+is_key_down :: inline (key : Key_Code) -> bool #must
+{
+	return (input_button_states[cast (s64) key] & .DOWN) != 0;
+}
+
+show_cursor :: inline ()
+{
+	#if OS == .WINDOWS
+	{
+		win32 :: #import "Windows";
+		win32.ShowCursor (1);
+	}
+	else
+	{
+		// @Todo!
+	}
+}
+
+hide_cursor :: inline ()
+{
+	#if OS == .WINDOWS
+	{
+		win32 :: #import "Windows";
+		win32.ShowCursor (0);
+	}
+	else
+	{
+		// @Todo!
+	}
+}
+
+set_mouse_pointer_position :: inline (x : int, y : int)
+{
+	#if OS == .WINDOWS
+	{
+		// Windows module does not have SetCursorPos
+		// win32 :: #import "Windows";
+		// win32.SetCursorPos (xx x, xx y);
+		// Hugh...
+		user32 :: #foreign_system_library "User32";
+		SetCursorPos :: (x : s32, y : s32) -> s32 #foreign user32;
+		SetCursorPos (xx x, xx y);
+	}
+	else
+	{
+		// @Todo!
+	}
+}
+
+decompose_transform :: inline (mat : Matrix4) -> translation : Vector3, rotation : Quaternion, scale : Vector3
+{
+	translation := xyz (
+		mat._14,
+		mat._24,
+		mat._34
+	);
+	rotation := get_rotation (mat);
+	scale := xyz (
+		mat._11,
+		mat._22,
+		mat._33
+	);
+
+	return translation, rotation, scale;
 }

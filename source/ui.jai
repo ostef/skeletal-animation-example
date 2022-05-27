@@ -1,8 +1,8 @@
 g_params : struct
 {
-	play_animations := true;
-	show_skeleton   := true;
+	show_skeleton := true;
 	skeleton_color := Vector3.{ 1, 1, 1 };
+	play_animations := true;
 	animation_time := 0.0;
 	animation_speed_in_fps := 30.0;
 };
@@ -19,6 +19,8 @@ update_ui :: (delta_time : float)
 	getrect.ui_per_frame_update (g_window, w, h, current_time);
 
 	// Init themes
+	label_theme : getrect.Label_Theme;
+	label_theme.font = g_font;
 	checkbox_theme : getrect.Checkbox_Theme;
 	checkbox_theme.font = g_font;
 	slider_theme : getrect.Slider_Theme;
@@ -32,18 +34,18 @@ update_ui :: (delta_time : float)
 		k, h - k * 2,
 		k, xx g_font.character_height
 	);
-	// Play Animations checkbox
-	{
-		r.w = k + xx simp.prepare_text (g_font, "Play Animations");
-		pressed := getrect.base_checkbox (r, "Play Animations", play_animations, *checkbox_theme);
-		play_animations ^= pressed;
-	}
-	r.y -= k * 2;
 	// Show Skeleton checkbox
 	{
 		r.w = k + xx simp.prepare_text (g_font, "Show Skeleton");
 		pressed := getrect.base_checkbox (r, "Show Skeleton", show_skeleton, *checkbox_theme);
 		show_skeleton ^= pressed;
+	}
+	r.y -= k * 2;
+	// Play Animations checkbox
+	{
+		r.w = k + xx simp.prepare_text (g_font, "Play Animations");
+		pressed := getrect.base_checkbox (r, "Play Animations", play_animations, *checkbox_theme);
+		play_animations ^= pressed;
 	}
 	r.y -= k * 2;
 	// Animation speed slider
@@ -59,13 +61,21 @@ update_ui :: (delta_time : float)
 		getrect.slider (r, *animation_time, 0.0, xx g_anim.sample_count, 1.0, *slider_theme, "Animation Time: ", "");
 	}
 
-	/*
-	// @Todo: make a subwindow for the color picker
+	r = getrect.get_rect (k, k * 2, k, k);
+	{
+		TEXT :: "Use ESC to toggle camera controls, WASD to move, SHIFT to speed up";
+		r.w = k + xx simp.prepare_text (g_font, TEXT);
+		getrect.label (r, TEXT, *label_theme);
+	}
+	r.y += k * 2 + r.h;
 	// Colors
-	r = getrect.get_rect (k, k * 2, k * 10, k * 10);
-	color_picker_theme := getrect.default_overall_theme.color_picker_theme;
-	getrect.color_picker (r, *g_params.skeleton_color, *color_picker_theme);
-	*/
+	{
+		r.w = k * 10;
+		r.h = k * 10;
+		// @Todo: make a subwindow for the color picker
+		color_picker_theme := getrect.default_overall_theme.color_picker_theme;
+		getrect.color_picker (r, *g_params.skeleton_color, *color_picker_theme);
+	}
 
 	getrect.draw_popups ();
 }
