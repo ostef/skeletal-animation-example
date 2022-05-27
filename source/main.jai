@@ -22,8 +22,8 @@ g_window : Window_Type;
 g_camera : Camera;
 g_running : bool;
 g_font : *simp.Dynamic_Font;
+g_checkbox_font : *simp.Dynamic_Font;
 g_slider_font : *simp.Dynamic_Font;
-g_input_font : *simp.Dynamic_Font;
 g_control_camera := false;
 g_anim : Sampled_Animation;
 
@@ -58,12 +58,12 @@ set_camera_control :: inline (control : bool)
 // our own because we namespace the module when importing it!
 init_fonts :: ()
 {
-	g_font = simp.get_font_at_size ("data", "OpenSans-Regular.ttf", 22);
+	g_font = simp.get_font_at_size ("data", "OpenSans-Regular.ttf", 20);
 	assert (g_font != null);
+	g_checkbox_font = simp.get_font_at_size ("data", "OpenSans-Regular.ttf", 18);
+	assert (g_checkbox_font != null);
 	g_slider_font = simp.get_font_at_size ("data", "OpenSans-Italic.ttf", 16);
 	assert (g_slider_font != null);
-	g_input_font = simp.get_font_at_size ("data", "OpenSans-Regular.ttf", 16);
-	assert (g_input_font != null);
 }
 
 main :: ()
@@ -96,6 +96,9 @@ main :: ()
 	g_running = true;
 	delta_time := 0.01667;
 	pose := make_pose_for_skeleton (*mesh);
+	set_camera_control (true);
+	glEnable (GL_BLEND);
+	glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	while g_running
 	{
 		frame_start := current_time_monotonic ();
@@ -116,7 +119,13 @@ main :: ()
 
 		update_flying_camera (*g_camera, delta_time);
 		reset_to_bind_pose (*pose);
-		sample_animation (g_anim, g_params.animation_time, *pose);
+		if !g_params.show_bind_pose
+			sample_animation (
+				g_anim,
+				g_params.animation_time,
+				*pose,
+				g_params.interpolation_mode
+			);
 		if g_params.play_animations
 			g_params.animation_time += delta_time * g_params.animation_speed_in_fps;
 		g_params.animation_time = fmod (g_params.animation_time, xx g_anim.sample_count);
@@ -130,10 +139,14 @@ main :: ()
 		draw_line (xyz (0, 0, 0), xyz (1, 0, 0), xyzw (1, 0, 0, 1));
 		draw_line (xyz (0, 0, 0), xyz (0, 1, 0), xyzw (0, 1, 0, 1));
 		draw_line (xyz (0, 0, 0), xyz (0, 0, -1), xyzw (0, 0, 1, 1));
+		for i : -10..10
+			draw_line (xyz (xx i, 0, -10), xyz (xx i, 0, 10), xyzw (0.4, 0.4, 0.4, 1));
+		for i : -10..10
+			draw_line (xyz (-10, 0, xx i), xyz (10, 0, xx i), xyzw (0.4, 0.4, 0.4, 1));
 		if g_params.show_skeleton
 		{
 			// Disable depth mask and testing so we can see
-			// the skeleton through other drawn stuff
+			// the skeleton through other things
 			glDepthMask (GL_FALSE);
 			glDisable (GL_DEPTH_TEST);
 			draw_pose (pose, Matrix4_Identity, xyzw (g_params.skeleton_color, 1));
@@ -209,9 +222,9 @@ decompose_transform :: inline (mat : Matrix4) -> translation : Vector3, rotation
 	);
 	rotation := get_rotation (mat);
 	scale := xyz (
-		mat._11,
-		mat._22,
-		mat._33
+		length (xyz (mat._11, mat._21, mat._31)),
+		length (xyz (mat._12, mat._22, mat._32)),
+		length (xyz (mat._13, mat._23, mat._33))
 	);
 
 	return translation, rotation, scale;
