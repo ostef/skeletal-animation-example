@@ -220,7 +220,7 @@ calculate_joint_transforms :: (using skeleton : *Skeleton)
 {
 	calculate_for_one_joint :: (using joint : *Joint, parent_transform : Matrix4)
 	{
-		bind_transform := local_bind_transform * parent_transform;
+		bind_transform := parent_transform * local_bind_transform;
 		inverse_bind_transform = inverse (bind_transform);
 		for * :children joint
 			calculate_for_one_joint (it, bind_transform);
