@@ -20,7 +20,7 @@ update_flying_camera :: (using camera : *Camera, delta_time : float)
 	mouse_delta : Vector2;
 	move_input  : Vector3;
 	move_speed  : float;
-	if input_application_has_focus
+	if g_control_camera && input_application_has_focus
 	{
 		move_speed = FLY_SPEED;
 		mouse_delta = xy (xx mouse_delta_x, xx mouse_delta_y);
