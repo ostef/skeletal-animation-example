@@ -54,7 +54,7 @@ build :: ()
 
 	if build_success
 	{
-		copy_directory (DATA_DIR, join (OUTPUT_DIR, DATA_DIR));
+		//copy_directory (DATA_DIR, join (OUTPUT_DIR, DATA_DIR));
 		if run_on_success
 		{
 			cmd := join (OUTPUT_DIR, OUTPUT_NAME);
