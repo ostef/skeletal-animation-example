@@ -103,7 +103,18 @@ reset_to_bind_pose :: (using pose : *Skeleton_Pose)
 	}
 }
 
-interpolate_joint_samples :: inline (a : Joint_Sample, b : Joint_Sample, t : float) -> Joint_Sample #must
+Interpolation_Mode :: enum
+{
+	NEAREST :: 0;
+	LINEAR  :: 1;
+}
+
+interpolate_joint_samples :: inline (
+	a : Joint_Sample,
+	b : Joint_Sample,
+	t : float,
+	interpolation_mode : Interpolation_Mode
+) -> Joint_Sample #must
 {
 	nlerp_shortest :: (a : Quaternion, b : Quaternion, t : float) -> Quaternion #must
 	{
@@ -117,20 +128,27 @@ interpolate_joint_samples :: inline (a : Joint_Sample, b : Joint_Sample, t : flo
 		return result;
 	}
 
-	t = clamp (t, 0, 1);
-	/*
-	if t < 0.5
-		return a;
-	return b;
-	*/
 	result : Joint_Sample = ---;
-	result.local_position    = lerp (a.local_position, b.local_position, t);
-	result.local_orientation = nlerp_shortest (a.local_orientation, b.local_orientation, t);
-	result.local_scale       = lerp (a.local_scale, b.local_scale, t);
+	if #complete interpolation_mode ==
+	{
+	case .NEAREST;
+		if t < 0.5 then result = a;
+		else            result = b;
+	case .LINEAR;
+		t = clamp (t, 0, 1);
+		result.local_position    = lerp (a.local_position, b.local_position, t);
+		result.local_orientation = nlerp_shortest (a.local_orientation, b.local_orientation, t);
+		result.local_scale       = lerp (a.local_scale, b.local_scale, t);
+	}
 	return result;
 }
 
-sample_animation :: (using anim : Sampled_Animation, time : float, pose : *Skeleton_Pose)
+sample_animation :: (
+	using anim : Sampled_Animation,
+	time : float,
+	pose : *Skeleton_Pose,
+	interpolation_mode := Interpolation_Mode.LINEAR
+)
 {
 	time = fmod (time, cast (float) sample_count);
 	for joint : joints
@@ -142,7 +160,12 @@ sample_animation :: (using anim : Sampled_Animation, time : float, pose : *Skele
 		second_index := (first_index + 1) % sample_count;
 		first  := joint.samples[first_index];
 		second := joint.samples[second_index];
-		pose.joints[joint_index].sample = interpolate_joint_samples (first, second, time - first_index);
+		pose.joints[joint_index].sample = interpolate_joint_samples (
+			first,
+			second,
+			time - first_index,
+			interpolation_mode
+		);
 	}
 }
 
@@ -154,7 +177,7 @@ calculate_pose_transforms :: (using pose : *Skeleton_Pose)
 		local_transform := make_translation_matrix4 (local_position)
 			* make_scale_matrix4 (local_scale)
 			* rotation_matrix(Matrix4, local_orientation);
-		model_space_transform = local_transform * parent_transform;
+		model_space_transform = parent_transform * local_transform;
 		for * :children skeleton_joint
 			calculate_joint_transforms (pose, it, model_space_transform);
 	}
