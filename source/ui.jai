@@ -2,8 +2,7 @@ g_params : struct
 {
 	show_skeleton := true;
 	skeleton_color := Vector3.{ 1, 1, 1 };
-	show_bind_pose := true;
-	play_animations := true;
+	show_animation := true;
 	animation_time := 0.0;
 	animation_speed_in_fps := 30.0;
 	interpolation_mode := Interpolation_Mode.LINEAR;
@@ -41,18 +40,11 @@ update_ui :: (delta_time : float)
 		show_skeleton ^= pressed;
 	}
 	r.y -= pad;
-	// Show Bind Pose checkbox
+	// Show Animations checkbox
 	{
-		r.w = r.h + xx simp.prepare_text (g_checkbox_font, "Show Bind Pose");
-		pressed := getrect.base_checkbox (r, "Show Bind Pose", show_bind_pose, *checkbox_theme);
-		show_bind_pose ^= pressed;
-	}
-	r.y -= pad;
-	// Play Animations checkbox
-	{
-		r.w = r.h + xx simp.prepare_text (g_checkbox_font, "Play Animations");
-		pressed := getrect.base_checkbox (r, "Play Animations", play_animations, *checkbox_theme);
-		play_animations ^= pressed;
+		r.w = r.h + xx simp.prepare_text (g_checkbox_font, "Show Animations");
+		pressed := getrect.base_checkbox (r, "Show Animations", show_animation, *checkbox_theme);
+		show_animation ^= pressed;
 	}
 	r.y -= pad;
 	// Animation speed slider

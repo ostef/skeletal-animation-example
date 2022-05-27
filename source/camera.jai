@@ -42,6 +42,7 @@ update_flying_camera :: (using camera : *Camera, delta_time : float)
 	euler_angles.y += delta.y * PI / 180.0;
 	euler_angles.y = clamp (euler_angles.y, -80.0  * PI / 180.0, 80.0 * PI / 180.0);
 	yaw : Quaternion;
+	// I am not sure why I need to invert the axis of rotation...
 	set_from_axis_and_angle (*yaw, 0, -1, 0, euler_angles.x);
 	pitch : Quaternion;
 	set_from_axis_and_angle (*pitch, -1, 0, 0, euler_angles.y);

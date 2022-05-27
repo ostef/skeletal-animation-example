@@ -119,15 +119,14 @@ main :: ()
 
 		update_flying_camera (*g_camera, delta_time);
 		reset_to_bind_pose (*pose);
-		if !g_params.show_bind_pose
+		if g_params.show_animation
 			sample_animation (
 				g_anim,
 				g_params.animation_time,
 				*pose,
 				g_params.interpolation_mode
 			);
-		if g_params.play_animations
-			g_params.animation_time += delta_time * g_params.animation_speed_in_fps;
+		g_params.animation_time += delta_time * g_params.animation_speed_in_fps;
 		g_params.animation_time = fmod (g_params.animation_time, xx g_anim.sample_count);
 		skinning_matrices := generate_skinning_matrices (*pose, temp);
 
