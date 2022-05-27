@@ -137,7 +137,7 @@ class Mesh:
 			for joint in self.joints:
 				fw (b"%s\n" % bytes (joint.name, 'UTF-8'))
 				if joint.parent is not None:
-					local_transform = joint.matrix_local @ joint.parent.matrix_local.inverted ()
+					local_transform = joint.parent.matrix_local.inverted () @ joint.matrix_local
 				else:
 					local_transform = joint.matrix_local
 				fw (b"%.6f %.6f %.6f %.6f\n" % local_transform[0][:])

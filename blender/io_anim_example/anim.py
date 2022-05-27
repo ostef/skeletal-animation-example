@@ -62,7 +62,7 @@ class Sampled_Animation:
 				matrix = transform_matrix @ bone.matrix
 				if bone.parent is not None:
 					parent_matrix = transform_matrix @ bone.parent.matrix
-					matrix = matrix @ parent_matrix.inverted ()
+					matrix = parent_matrix.inverted () @ matrix
 				location, orientation, scale = matrix.decompose ()
 				joint_index = anim.name_to_joint_id[bone.name]
 				anim.joints[joint_index].samples.append (
@@ -140,7 +140,7 @@ def export_animations (
 		objs = context.scene.objects
 	exported_actions : List[bpy.types.Action] = []
 	for obj in objs:
-		if obj.animation_data is None:
+		if obj.animation_data is None or obj.pose is None:
 			continue
 		action = obj.animation_data.action
 		if action is None or action in exported_actions:
