@@ -1,0 +1,11 @@
+[1]
+
+duration #
+joint_count #
+sample_count #
+
+# name
+samples:
+# px py pz
+# ox oy oz ow
+# sx sy sz
