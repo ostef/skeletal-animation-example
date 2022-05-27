@@ -84,10 +84,10 @@ main :: ()
 		return;
 	}
 	init_rendering_objects (*mesh);
-	ok = load_animation_from_file (*g_anim, "data/Run_F.anim");
+	ok = load_animation_from_file (*g_anim, "data/Run_Forward.anim");
 	if !ok
 	{
-		log_error ("Could not load Run_F animation.");
+		log_error ("Could not load Run_Forward animation.");
 		return;
 	}
 	// @Hack: provide a way to trim animations when exporting them
