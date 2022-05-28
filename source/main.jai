@@ -144,7 +144,6 @@ main :: ()
 	g_camera.position = xyz (0, 1, 4);
 	g_running = true;
 	delta_time := 0.01667;
-	set_camera_control (true);
 	glEnable (GL_BLEND);
 	glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	while g_running
