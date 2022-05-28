@@ -1,14 +1,15 @@
 g_mesh_shader : GLuint;
 g_line_shader : GLuint;
 g_line_vao, g_line_vbo : GLuint;
+g_big_data_ubo : GLuint;
+
+GL_BIG_DATA_UNIFORM_BINDING :: 0;
 
 Vertex_Pos_Color :: struct
 {
 	position : Vector3;
 	color : Vector4;
 }
-
-MAX_JOINTS :: 150;
 
 init_rendering_objects :: () -> bool
 {
@@ -92,6 +93,8 @@ init_rendering_objects :: () -> bool
 	g_mesh_shader, ok = create_shader_program (MESH_VERTEX_SHADER, MESH_FRAGMENT_SHADER);
 	if !ok
 		return false;
+	big_data_uniform_index := glGetUniformBlockIndex (g_mesh_shader, "Big_Data");
+	glUniformBlockBinding (g_mesh_shader, big_data_uniform_index, GL_BIG_DATA_UNIFORM_BINDING);
 	g_line_shader, ok = create_shader_program (LINE_VERTEX_SHADER, LINE_FRAGMENT_SHADER);
 	if !ok
 		return false;
@@ -108,6 +111,13 @@ init_rendering_objects :: () -> bool
 
 	glBindVertexArray (0);
 	glBindBuffer (GL_ARRAY_BUFFER, 0);
+
+	// Create big data uniform buffer object
+	glGenBuffers (1, *g_big_data_ubo);
+	glBindBuffer (GL_UNIFORM_BUFFER, g_big_data_ubo);
+	glBufferData (GL_UNIFORM_BUFFER, size_of (Matrix4) * MAX_JOINTS, null, GL_DYNAMIC_DRAW);
+	glBindBuffer (GL_UNIFORM_BUFFER, 0);
+	glBindBufferBase (GL_UNIFORM_BUFFER, GL_BIG_DATA_UNIFORM_BINDING, g_big_data_ubo);
 
 	return true;
 }
@@ -137,13 +147,18 @@ draw_line :: (start : Vector3, end : Vector3, start_color : Vector4, end_color :
 draw_mesh :: (using mesh : Skinned_Mesh, model_matrix : Matrix4, skinning_matrices : []Matrix4)
 {
 	assert (skinning_matrices.count <= MAX_JOINTS, "Skinning matrices array cannot have more than % elements for now.");
+
+	glBindBuffer (GL_UNIFORM_BUFFER, g_big_data_ubo);
+	glBufferSubData (GL_UNIFORM_BUFFER, 0, size_of (Matrix4) * skinning_matrices.count, skinning_matrices.data);
+	glBindBuffer (GL_UNIFORM_BUFFER, 0);
+
 	glBindVertexArray (vao);
 	glBindBuffer (GL_ARRAY_BUFFER, vbo);
 	glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, ibo);
 	glUseProgram (g_mesh_shader);
 	glUniformMatrix4fv (glGetUniformLocation (g_mesh_shader, "u_Model_Matrix"), 1, GL_TRUE, *model_matrix.coef[0][0]);
 	glUniformMatrix4fv (glGetUniformLocation (g_mesh_shader, "u_View_Projection_Matrix"), 1, GL_TRUE, *g_camera.view_projection_matrix.coef[0][0]);
-	glUniformMatrix4fv (glGetUniformLocation (g_mesh_shader, "u_Skinning_Matrices"), xx skinning_matrices.count, GL_TRUE, cast (*float) skinning_matrices.data);
+
 	glDrawElements (GL_TRIANGLES, cast (u32) indices.count, GL_UNSIGNED_INT, null);
 }
 
@@ -200,7 +215,7 @@ draw_pose :: (pose : Skeleton_Pose, transform : Matrix4, color : Vector4)
 MESH_VERTEX_SHADER :: #string GLSL
 #version 330 core
 
-const int MAX_JOINTS  = 150;
+const int MAX_JOINTS  = 1000;
 const int MAX_WEIGHTS = 4;
 
 layout (location = 0) in vec3 a_Position;
@@ -210,7 +225,15 @@ layout (location = 3) in ivec4 a_Joint_Ids;
 
 uniform mat4 u_Model_Matrix;
 uniform mat4 u_View_Projection_Matrix;
-uniform mat4 u_Skinning_Matrices[MAX_JOINTS];
+// A simple uniform variable cannot hold a lot of data,
+// so we use a uniform block to store the skinning information.
+// The spec says a uniform block can be up to 128KB big, which
+// means we can store at most 2000 4x4 matrices. We set MAX_JOINTS
+// to 1000.
+layout (std140) uniform Big_Data
+{
+	mat4 u_Skinning_Matrices[MAX_JOINTS];
+};
 
 out vec3 Normal;
 

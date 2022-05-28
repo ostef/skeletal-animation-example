@@ -19,6 +19,12 @@ getrect :: #import "GetRect";
 #load "anim.jai";
 #load "ui.jai";
 
+MAX_WEIGHTS :: 4;
+// We use uniform buffer objects to store the skinning data,
+// which can be up to 128KB in size, which is 2000 4x4 matrices.
+// So we can have up to 2000 joints, but let's make this 1000.
+MAX_JOINTS :: 1000;
+
 g_window : Window_Type;
 g_camera : Camera;
 g_running : bool;
@@ -171,14 +177,14 @@ main :: ()
 		{
 			pose = make_pose_for_skeleton (mesh, allocator = temp);
 			reset_to_bind_pose (*pose);
+			if anim && g_params.show_animation
+				sample_animation (
+					anim,
+					g_params.animation_time,
+					*pose,
+					g_params.interpolation_mode
+				);
 		}
-		if mesh && anim && g_params.show_animation
-			sample_animation (
-				anim,
-				g_params.animation_time,
-				*pose,
-				g_params.interpolation_mode
-			);
 			
 		if anim
 		{
@@ -189,7 +195,7 @@ main :: ()
 			g_params.animation_time = 0;
 		skinning_matrices : []Matrix4;
 		if mesh
-			skinning_matrices = generate_skinning_matrices (*pose, temp);
+			skinning_matrices = generate_skinning_matrices (*pose, temp, transpose_result = true);
 
 		glDepthMask (GL_TRUE);
 		glEnable (GL_DEPTH_TEST);

@@ -36,7 +36,6 @@ load_animation_from_file :: (anim : *Sampled_Animation, filename : string) -> bo
 	parse_joint :: (handler : *Text_File_Handler, anim : *Sampled_Animation) -> bool
 	{
 		line, ok := consume_next_line (handler);
-		// @Todo: ensure the joint name is valid
 		joint := *anim.joints.data[anim.joints.count];
 		anim.joints.count += 1;
 		joint.name = copy_string (line);
@@ -185,12 +184,16 @@ calculate_pose_transforms :: (using pose : *Skeleton_Pose)
 	calculate_joint_transforms (pose, *skeleton.joints[0], Matrix4_Identity);
 }
 
-generate_skinning_matrices :: (using pose : *Skeleton_Pose, allocator : Allocator) -> []Matrix4 #must
+generate_skinning_matrices :: (using pose : *Skeleton_Pose, allocator : Allocator, transpose_result : bool) -> []Matrix4 #must
 {
 	calculate_pose_transforms (pose);
 	result := NewArray (joints.count, Matrix4, initialized = false, allocator = allocator);
 	for i : 0..result.count - 1
+	{
 		result[i] = joints[i].model_space_transform * skeleton.joints[i].inverse_bind_transform;
+		if transpose_result
+			transpose (*result[i]);
+	}
 
 	return result;
 }

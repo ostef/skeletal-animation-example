@@ -29,7 +29,7 @@ Skeleton :: struct
 		// This is very useful when you want to save space, because
 		// you can decide the size of the pointer, and when serializing
 		// or deserializing data.
-		// Here, we know we can't have more than 32767 joints, so we use
+		// Here, we know we can't have more than 1000 joints, so we use
 		// 2 byte integers as pointers.
 		parent       : *~s16 Joint;
 		first_child  : *~s16 Joint;
@@ -85,8 +85,8 @@ load_mesh_from_file :: (mesh : *Skinned_Mesh, filename : string) -> bool
 			{
 				id : int;
 				id, ok, line = string_to_int (line);
-				if !ok || child_count < 0 || child_count > 0x7fff
-					return error_out (handler, "Expected an integer in the range [0;%].", 0x7fff);
+				if !ok || child_count < 0 || child_count >= MAX_JOINTS
+					return error_out (handler, "Expected an integer in the range [0;%).", MAX_JOINTS);
 				if i == 0
 					joint.first_child = *mesh.joints.data[id];
 				mesh.joints.data[id].parent = joint;
@@ -148,8 +148,8 @@ load_mesh_from_file :: (mesh : *Skinned_Mesh, filename : string) -> bool
 	joint_count, ok := parse_ident_and_int_line (*handler, "joint_count");
 	if !ok
 		return false;
-	if joint_count > 0x7fff
-		return error_out (handler, "Too many joints (expected at most %, got %).", 0x7fff, joint_count);
+	if joint_count > MAX_JOINTS
+		return error_out (handler, "Too many joints (expected at most %, got %).", MAX_JOINTS, joint_count);
 	mesh.joints.data = alloc (size_of (Skeleton.Joint) * joint_count);
 	memset (mesh.joints.data, 0, size_of (Skeleton.Joint) * joint_count);
 	init (*mesh.name_to_joint_id, joint_count);
