@@ -7,9 +7,8 @@ from typing import (
 	Tuple
 )
 from bpy.props import (
-	StringProperty,
 	BoolProperty,
-	FloatProperty
+	EnumProperty
 )
 from bpy_extras.io_utils import (
 	ExportHelper,
@@ -47,6 +46,8 @@ class Sampled_Animation:
 	def from_action (
 		blender_obj : bpy.types.Object,
 		blender_action : bpy.types.Action,
+		frame_begin : int,
+		frame_end : int,
 		transform_matrix : mathutils.Matrix
 	):
 		def append_pose (
@@ -82,10 +83,7 @@ class Sampled_Animation:
 		prev_action = blender_obj.animation_data.action
 		prev_frame  = bpy.context.scene.frame_current
 		blender_obj.animation_data.action = blender_action
-		frame_begin, frame_end = (
-			int (blender_action.frame_range[0]),
-			int (blender_action.frame_range[1])
-		)
+
 		# Initialize the joint animations array and name dict
 		bpy.context.scene.frame_set (frame_begin)
 		for bone in blender_obj.pose.bones:
@@ -126,6 +124,7 @@ class Sampled_Animation:
 def export_animations (
 	context : bpy.types.Context,
 	filename : str,
+	use_action_frame_range : bool,
 	use_selection : bool,
 	apply_transform : bool,
 	axis_conversion_matrix : mathutils.Matrix
@@ -151,14 +150,21 @@ def export_animations (
 		if axis_conversion_matrix is not None:
 			transform_matrix = transform_matrix @ axis_conversion_matrix.to_4x4 ()
 		output_filename = os.path.join (os.path.dirname (filename), action.name) + Exporter.filename_ext
-		anim = Sampled_Animation.from_action (obj, action, transform_matrix)
+		if use_action_frame_range:
+			frame_begin, frame_end = (
+				int (action.frame_range[0]),
+				int (action.frame_range[1])
+			)
+		else:
+			frame_begin, frame_end = (
+				int (context.scene.frame_start),
+				int (context.scene.frame_end)
+			)
+		anim = Sampled_Animation.from_action (obj, action, frame_begin, frame_end, transform_matrix)
 		anim.write_text (output_filename)
 		print (f"Exported animation clip {action.name} to file {output_filename}.\n")
 		exported_actions.append (action)
 
-# By default, we use -Z forward because even though our coordinate system
-# uses Z forward and Y up, our meshes face backwards in blender because
-# it is easier to work with.
 @orientation_helper (axis_forward = '-Z', axis_up = 'Y')
 class Exporter (bpy.types.Operator, ExportHelper):
 	"""Export animation data"""
@@ -177,12 +183,18 @@ class Exporter (bpy.types.Operator, ExportHelper):
 		description = "Apply the object transform matrix when exporting animations.",
 		default = True
 	)
+	use_action_frame_range : BoolProperty (
+		name = "Use action frame range",
+		description = "Use the action frame range rather than the scene frame range.",
+		default = False
+	)
 
 	def execute (self, context : bpy.types.Context):
 		context.window.cursor_set ('WAIT')
 		export_animations (
 			context,
 			self.filepath,
+			self.use_action_frame_range,
 			self.use_selection,
 			self.apply_transform,
 			axis_conversion (to_forward = self.axis_forward, to_up = self.axis_up)

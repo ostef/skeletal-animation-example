@@ -213,9 +213,6 @@ def export_meshes (
 		obj.to_mesh_clear ()
 		print (f"Exported mesh {obj.name} to file {output_filename}.\n")
 
-# By default, we use -Z forward because even though our coordinate system
-# uses Z forward and Y up, our meshes face backwards in blender because
-# it is easier to work with.
 @orientation_helper (axis_forward = '-Z', axis_up = 'Y')
 class Exporter (bpy.types.Operator, ExportHelper):
 	"""Export mesh data"""
