@@ -89,6 +89,7 @@ make_pose_for_skeleton :: (skeleton : *Skeleton, allocator := context.allocator)
 	result : Skeleton_Pose;
 	result.skeleton = skeleton;
 	result.joints = NewArray (skeleton.joints.count, Skeleton_Pose.Joint, allocator = allocator);
+	reset_to_bind_pose (*result);
 	return result;
 }
 

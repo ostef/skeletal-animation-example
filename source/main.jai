@@ -180,7 +180,6 @@ main :: ()
 		if mesh
 		{
 			pose = make_pose_for_skeleton (mesh, allocator = temp);
-			reset_to_bind_pose (*pose);
 			if anim && g_params.show_animation
 				sample_animation (
 					anim,
