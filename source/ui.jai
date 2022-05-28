@@ -124,7 +124,7 @@ update_ui :: (delta_time : float)
 		r.w = xx (w * 0.1);
 		getrect.dropdown (
 			r,
-			string.[ "Nearest", "Linear" ],
+			string.[ "Nearest", "Linear", "Linear, slerp" ],
 			cast (*s32) *interpolation_mode,
 			*dropdown_theme
 		);

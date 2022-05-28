@@ -106,6 +106,7 @@ Interpolation_Mode :: enum s32
 {
 	NEAREST :: 0;
 	LINEAR  :: 1;
+	LINEAR_SLERP :: 2;
 }
 
 interpolate_joint_samples :: inline (
@@ -121,10 +122,18 @@ interpolate_joint_samples :: inline (
 		second := b;
 		if dot (first, second) < 0
 			second = negate (second);
-		result := (1 - t) * first + t * second;
-		normalize_or_identity (*result);
+		
+		return nlerp (first, second, t);
+	}
 
-		return result;
+	slerp_shortest :: (a : Quaternion, b : Quaternion, t : float) -> Quaternion #must
+	{
+		first  := a;
+		second := b;
+		if dot (first, second) < 0
+			second = negate (second);
+
+		return slerp (first, second, t);
 	}
 
 	result : Joint_Sample = ---;
@@ -137,6 +146,11 @@ interpolate_joint_samples :: inline (
 		t = clamp (t, 0, 1);
 		result.local_position    = lerp (a.local_position, b.local_position, t);
 		result.local_orientation = nlerp_shortest (a.local_orientation, b.local_orientation, t);
+		result.local_scale       = lerp (a.local_scale, b.local_scale, t);
+	case .LINEAR_SLERP;
+		t = clamp (t, 0, 1);
+		result.local_position    = lerp (a.local_position, b.local_position, t);
+		result.local_orientation = slerp_shortest (a.local_orientation, b.local_orientation, t);
 		result.local_scale       = lerp (a.local_scale, b.local_scale, t);
 	}
 	return result;
