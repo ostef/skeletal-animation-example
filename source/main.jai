@@ -89,6 +89,7 @@ find_and_load_assets :: inline ()
 			loaded := load_mesh_from_file (*mesh, info.full_name);
 			if loaded
 			{
+				// Maybe this should be called by default when loading the mesh ?
 				init_rendering_objects (*mesh);
 				table_add (*g_loaded_meshes, copy_string (mesh_name), mesh);
 			}
@@ -109,6 +110,7 @@ find_and_load_assets :: inline ()
 	}
 
 	visit_files ("data", true, null, visitor, visit_directories = true);
+	// Initialize the asset names arrays
 	g_params.mesh_names = NewArray (g_loaded_meshes.count + 1, string);
 	g_params.mesh_names[0] = "None";
 	i := 1;
@@ -125,6 +127,9 @@ find_and_load_assets :: inline ()
 		g_params.animation_names[i] = name;
 		i += 1;
 	}
+	// Start with a mesh and some animation
+	g_params.mesh_index = xx (g_params.mesh_names.count - 1);
+	g_params.animation_index = xx (g_params.animation_names.count - 1);
 }
 
 main :: ()
@@ -138,7 +143,10 @@ main :: ()
 		return;
 	find_and_load_assets ();
 
-	g_camera.position = xyz (0, 1, 4);
+	// Position the camera in a nice way
+	g_camera.position = xyz (1, 1.3, 2.3);
+	g_camera.euler_angles.x = -20 * PI / 180.0;
+	g_camera.euler_angles.y = 10 * PI / 180.0;
 	g_running = true;
 	delta_time := 0.01667;
 	glEnable (GL_BLEND);
@@ -181,7 +189,7 @@ main :: ()
 					g_params.interpolation_mode
 				);
 		}
-			
+
 		if anim
 		{
 			g_params.animation_time += delta_time * g_params.animation_speed_in_fps;
@@ -202,7 +210,7 @@ main :: ()
 		// Draw coordinate axes
 		draw_line (xyz (0, 0, 0), xyz (1, 0, 0), xyzw (1, 0, 0, 1));
 		draw_line (xyz (0, 0, 0), xyz (0, 1, 0), xyzw (0, 1, 0, 1));
-		draw_line (xyz (0, 0, 0), xyz (0, 0, -1), xyzw (0, 0, 1, 1));
+		draw_line (xyz (0, 0, 0), xyz (0, 0, 1), xyzw (0, 0, 1, 1));
 		// Draw grid
 		for i : -10..10
 			draw_line (xyz (xx i, 0, -10), xyz (xx i, 0, 10), xyzw (0.4, 0.4, 0.4, 1));
