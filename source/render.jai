@@ -93,7 +93,7 @@ init_rendering_objects :: () -> bool
 	// information in a shader uniform block.
 	uniform_block_size : s32;
 	glGetIntegerv (GL_MAX_UNIFORM_BLOCK_SIZE, *uniform_block_size);
-	assert (uniform_block_size > MAX_JOINTS * size_of (Matrix4),
+	assert (uniform_block_size >= MAX_JOINTS * size_of (Matrix4),
 		"OpenGL implementation does not allow storing more than % bytes in uniform block, but we need at least % for skinning information. Recompile with a smaller MAX_JOINTS value.",
 		uniform_block_size, MAX_JOINTS * size_of (Matrix4));
 
@@ -224,6 +224,7 @@ MESH_VERTEX_SHADER :: #insert #run sprint (#string END
 #string GLSL
 #version 330 core
 
+// These will be replaced with the values we defined in the Jai source code
 const int MAX_JOINTS  = %1;
 const int MAX_WEIGHTS = %2;
 

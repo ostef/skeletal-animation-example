@@ -14,6 +14,8 @@ Skinned_Mesh :: struct
 	vao, vbo, ibo : GLuint;
 }
 
+#assert MAX_JOINTS < 0x7fff "MAX_JOINTS can't exceed the max of an s16, since we use that for joint ids."
+
 Skeleton :: struct
 {
 	Joint :: struct
@@ -28,9 +30,14 @@ Skeleton :: struct
 		// address of parent itself).
 		// This is very useful when you want to save space, because
 		// you can decide the size of the pointer, and when serializing
-		// or deserializing data.
+		// or deserializing data, since the pointers won't move relative
+		// to each other.
 		// Here, we know we can't have more than 1000 joints, so we use
 		// 2 byte integers as pointers.
+		// A common mistake I do when using relative pointers is to have
+		// a relative pointer inside an array, pointing to something that
+		// is outside that array (i.e. storing the joint's children
+		// inside an array, instead of a linked-list)
 		parent       : *~s16 Joint;
 		first_child  : *~s16 Joint;
 		//prev_sibling : *~s16 Joint;	// We don't need that one for now
@@ -41,7 +48,9 @@ Skeleton :: struct
 	joints : []Joint;	// Root joint is joints[0]
 }
 
-// for_expansion
+// Here's an example of what is (as of now) called a for_expansion.
+// This for expansion can be used like so:
+// for :children it, it_index : skeleton_joint { ... }
 children :: (joint : *Skeleton.Joint, body : Code, flags : For_Flags) #expand
 {
 	current := joint.first_child;
@@ -58,6 +67,9 @@ children :: (joint : *Skeleton.Joint, body : Code, flags : For_Flags) #expand
 	}
 }
 
+// In a real game engine, we would use binary file formats, but this
+// shows how you can use the Text_File_Handler. Maybe we should have
+// a binary file format though, to show how you can load these.
 load_mesh_from_file :: (mesh : *Skinned_Mesh, filename : string) -> bool
 {
 	parse_joint :: (handler : *Text_File_Handler, mesh : *Skinned_Mesh) -> bool

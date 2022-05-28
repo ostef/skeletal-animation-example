@@ -47,6 +47,7 @@ update_ui :: (delta_time : float)
 	// Mesh selection
 	{
 		r.w = xx simp.prepare_text (g_font, "Mesh: ");
+		// GetRect bug: this label is not visible for some reason
 		getrect.label (r, "Mesh: ", *label_theme);
 		r.x += dropdown_offset;
 		defer r.x -= dropdown_offset;
