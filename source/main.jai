@@ -69,11 +69,11 @@ set_camera_control :: inline (control : bool)
 // our own because we namespace the module when importing it!
 init_fonts :: ()
 {
-	g_font = simp.get_font_at_size ("data", "OpenSans-Regular.ttf", 20);
+	g_font = simp.get_font_at_size ("data/fonts", "OpenSans-Regular.ttf", 20);
 	assert (g_font != null);
-	g_checkbox_font = simp.get_font_at_size ("data", "OpenSans-Regular.ttf", 18);
+	g_checkbox_font = simp.get_font_at_size ("data/fonts", "OpenSans-Regular.ttf", 18);
 	assert (g_checkbox_font != null);
-	g_slider_font = simp.get_font_at_size ("data", "OpenSans-Italic.ttf", 16);
+	g_slider_font = simp.get_font_at_size ("data/fonts", "OpenSans-Italic.ttf", 16);
 	assert (g_slider_font != null);
 	g_dropdown_font = g_slider_font;
 }
