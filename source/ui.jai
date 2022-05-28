@@ -38,18 +38,19 @@ update_ui :: (delta_time : float)
 
 	k := 16.0;
 	pad := cast (float) g_font.character_height * 1.6;
+	dropdown_offset := w * 0.2;
+	dropdown_width  := w * 0.1;
 	r := getrect.get_rect (
 		k, h - k * 2,
 		k, xx g_font.character_height
 	);
 	// Mesh selection
 	{
-		text_width := cast (float) simp.prepare_text (g_font, "Mesh: ");
-		r.w = text_width;
+		r.w = xx simp.prepare_text (g_font, "Mesh: ");
 		getrect.label (r, "Mesh: ", *label_theme);
-		r.x += text_width;
-		defer r.x -= text_width;
-		r.w = xx (w * 0.1);
+		r.x += dropdown_offset;
+		defer r.x -= dropdown_offset;
+		r.w = dropdown_width;
 		getrect.dropdown (
 			r,
 			mesh_names,
@@ -60,12 +61,11 @@ update_ui :: (delta_time : float)
 	r.y -= pad;
 	// Animation selection
 	{
-		text_width := cast (float) simp.prepare_text (g_font, "Animation: ");
-		r.w = text_width;
+		r.w = xx simp.prepare_text (g_font, "Animation: ");
 		getrect.label (r, "Animation: ", *label_theme);
-		r.x += text_width;
-		defer r.x -= text_width;
-		r.w = xx (w * 0.1);
+		r.x += dropdown_offset;
+		defer r.x -= dropdown_offset;
+		r.w = dropdown_width;
 		getrect.dropdown (
 			r,
 			animation_names,
@@ -116,12 +116,11 @@ update_ui :: (delta_time : float)
 	r.y -= pad;
 	// Interpolation mode
 	{
-		text_width := cast (float) simp.prepare_text (g_font, "Interpolation Mode: ");
-		r.w = text_width;
+		r.w = xx simp.prepare_text (g_font, "Interpolation Mode: ");
 		getrect.label (r, "Interpolation Mode: ", *label_theme);
-		r.x += text_width;
-		defer r.x -= text_width;
-		r.w = xx (w * 0.1);
+		r.x += dropdown_offset;
+		defer r.x -= dropdown_offset;
+		r.w = dropdown_width;
 		getrect.dropdown (
 			r,
 			string.[ "Nearest", "Linear", "Linear, slerp" ],
