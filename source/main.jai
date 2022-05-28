@@ -5,6 +5,7 @@
 // Math Matrices are row-major. In other words,
 // you have [row 0][row 1][row 2][...] in memory.
 #import "Math";
+#import "File_Utilities";
 #import "GL";
 #import "Hash_Table";
 
@@ -21,11 +22,15 @@ getrect :: #import "GetRect";
 g_window : Window_Type;
 g_camera : Camera;
 g_running : bool;
+g_control_camera : bool;
+
 g_font : *simp.Dynamic_Font;
 g_checkbox_font : *simp.Dynamic_Font;
 g_slider_font : *simp.Dynamic_Font;
-g_control_camera := false;
-g_anim : Sampled_Animation;
+g_dropdown_font : *simp.Dynamic_Font;
+
+g_loaded_meshes : Table (string, Skinned_Mesh);
+g_loaded_animations : Table (string, Sampled_Animation);
 
 handle_window_event :: (event : Event)
 {
@@ -64,6 +69,59 @@ init_fonts :: ()
 	assert (g_checkbox_font != null);
 	g_slider_font = simp.get_font_at_size ("data", "OpenSans-Italic.ttf", 16);
 	assert (g_slider_font != null);
+	g_dropdown_font = g_slider_font;
+}
+
+find_and_load_assets :: inline ()
+{
+	visitor :: (info : *File_Visit_Info, data : *void)
+	{
+		if info.is_directory
+			return;
+		if ends_with (info.full_name, ".mesh")
+		{
+			mesh : Skinned_Mesh;
+			mesh_name := info.short_name;
+			mesh_name.count -= ".mesh".count;
+			loaded := load_mesh_from_file (*mesh, info.full_name);
+			if loaded
+			{
+				init_rendering_objects (*mesh);
+				table_add (*g_loaded_meshes, copy_string (mesh_name), mesh);
+			}
+			else
+				log_error ("Could not load % mesh.", mesh_name);
+		}
+		else if ends_with (info.full_name, ".anim")
+		{
+			anim : Sampled_Animation;
+			anim_name := info.short_name;
+			anim_name.count -= ".anim".count;
+			loaded := load_animation_from_file (*anim, info.full_name);
+			if loaded
+				table_add (*g_loaded_animations, copy_string (anim_name), anim);
+			else
+				log_error ("Could not load % animation.", anim_name);
+		}
+	}
+
+	visit_files ("data", true, null, visitor, visit_directories = true);
+	g_params.mesh_names = NewArray (g_loaded_meshes.count + 1, string);
+	g_params.mesh_names[0] = "None";
+	i := 1;
+	for val, name : g_loaded_meshes
+	{
+		g_params.mesh_names[i] = name;
+		i += 1;
+	}
+	g_params.animation_names = NewArray (g_loaded_animations.count + 1, string);
+	g_params.animation_names[0] = "None";
+	i = 1;
+	for val, name : g_loaded_animations
+	{
+		g_params.animation_names[i] = name;
+		i += 1;
+	}
 }
 
 main :: ()
@@ -75,27 +133,11 @@ main :: ()
 	init_fonts ();
 	if !init_rendering_objects ()
 		return;
+	find_and_load_assets ();
 
-	mesh : Skinned_Mesh;
-	ok := load_mesh_from_file (*mesh, "data/Mannequin.mesh");
-	if !ok
-	{
-		log_error ("Could not load Mannequin mesh.");
-		return;
-	}
-	init_rendering_objects (*mesh);
-	ok = load_animation_from_file (*g_anim, "data/Run_Forward.anim");
-	if !ok
-	{
-		log_error ("Could not load Run_Forward animation.");
-		return;
-	}
-	// @Hack: provide a way to trim animations when exporting them
-	g_anim.sample_count -= 4;
 	g_camera.position = xyz (0, 1, 4);
 	g_running = true;
 	delta_time := 0.01667;
-	pose := make_pose_for_skeleton (*mesh);
 	set_camera_control (true);
 	glEnable (GL_BLEND);
 	glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -118,31 +160,53 @@ main :: ()
 		}
 
 		update_flying_camera (*g_camera, delta_time);
-		reset_to_bind_pose (*pose);
-		if g_params.show_animation
+		mesh : *Skinned_Mesh;
+		if g_params.mesh_index > 0
+			mesh = table_find_pointer (*g_loaded_meshes, g_params.mesh_names[g_params.mesh_index]);
+		anim : *Sampled_Animation;
+		if g_params.animation_index > 0
+			anim = table_find_pointer (*g_loaded_animations, g_params.animation_names[g_params.animation_index]);
+		pose : Skeleton_Pose;
+		if mesh
+		{
+			pose = make_pose_for_skeleton (mesh, allocator = temp);
+			reset_to_bind_pose (*pose);
+		}
+		if mesh && anim && g_params.show_animation
 			sample_animation (
-				g_anim,
+				anim,
 				g_params.animation_time,
 				*pose,
 				g_params.interpolation_mode
 			);
-		g_params.animation_time += delta_time * g_params.animation_speed_in_fps;
-		g_params.animation_time = fmod (g_params.animation_time, xx g_anim.sample_count);
-		skinning_matrices := generate_skinning_matrices (*pose, temp);
+			
+		if anim
+		{
+			g_params.animation_time += delta_time * g_params.animation_speed_in_fps;
+			g_params.animation_time = fmod (g_params.animation_time, xx anim.sample_count);
+		}
+		else
+			g_params.animation_time = 0;
+		skinning_matrices : []Matrix4;
+		if mesh
+			skinning_matrices = generate_skinning_matrices (*pose, temp);
 
 		glDepthMask (GL_TRUE);
 		glEnable (GL_DEPTH_TEST);
 		simp.clear_render_target (0.1, 0.1, 0.1, 1);
 		glClear (GL_DEPTH_BUFFER_BIT);
-		draw_mesh (mesh, Matrix4_Identity, skinning_matrices);
+		if mesh && g_params.show_mesh
+			draw_mesh (mesh, Matrix4_Identity, skinning_matrices);
+		// Draw coordinate axes
 		draw_line (xyz (0, 0, 0), xyz (1, 0, 0), xyzw (1, 0, 0, 1));
 		draw_line (xyz (0, 0, 0), xyz (0, 1, 0), xyzw (0, 1, 0, 1));
 		draw_line (xyz (0, 0, 0), xyz (0, 0, -1), xyzw (0, 0, 1, 1));
+		// Draw grid
 		for i : -10..10
 			draw_line (xyz (xx i, 0, -10), xyz (xx i, 0, 10), xyzw (0.4, 0.4, 0.4, 1));
 		for i : -10..10
 			draw_line (xyz (-10, 0, xx i), xyz (10, 0, xx i), xyzw (0.4, 0.4, 0.4, 1));
-		if g_params.show_skeleton
+		if mesh && g_params.show_skeleton
 		{
 			// Disable depth mask and testing so we can see
 			// the skeleton through other things

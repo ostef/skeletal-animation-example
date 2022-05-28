@@ -103,7 +103,7 @@ reset_to_bind_pose :: (using pose : *Skeleton_Pose)
 	}
 }
 
-Interpolation_Mode :: enum
+Interpolation_Mode :: enum s32
 {
 	NEAREST :: 0;
 	LINEAR  :: 1;

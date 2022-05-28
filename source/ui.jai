@@ -1,7 +1,12 @@
 g_params : struct
 {
-	show_skeleton := true;
+	mesh_names : []string;
+	mesh_index : s32;
+	animation_names : []string;
+	animation_index : s32;
 	skeleton_color := Vector3.{ 1, 1, 1 };
+	show_skeleton := true;
+	show_mesh := true;
 	show_animation := true;
 	animation_time := 0.0;
 	animation_speed_in_fps := 30.0;
@@ -26,6 +31,10 @@ update_ui :: (delta_time : float)
 	checkbox_theme.font = g_checkbox_font;
 	slider_theme : getrect.Slider_Theme;
 	slider_theme.foreground.font = g_slider_font;
+	dropdown_theme := getrect.default_overall_theme.dropdown_theme;
+	dropdown_theme.theme_for_current_value.font = g_dropdown_font;
+	dropdown_theme.theme_for_each_choice.font = g_dropdown_font;
+	dropdown_theme.theme_for_current_choice.font = g_dropdown_font;
 
 	k := 16.0;
 	pad := cast (float) g_font.character_height * 1.6;
@@ -33,11 +42,50 @@ update_ui :: (delta_time : float)
 		k, h - k * 2,
 		k, xx g_font.character_height
 	);
+	// Mesh selection
+	{
+		text_width := cast (float) simp.prepare_text (g_font, "Mesh: ");
+		r.w = text_width;
+		getrect.label (r, "Mesh: ", *label_theme);
+		r.x += text_width;
+		defer r.x -= text_width;
+		r.w = xx (w * 0.1);
+		getrect.dropdown (
+			r,
+			mesh_names,
+			*mesh_index,
+			*dropdown_theme
+		);
+	}
+	r.y -= pad;
+	// Animation selection
+	{
+		text_width := cast (float) simp.prepare_text (g_font, "Animation: ");
+		r.w = text_width;
+		getrect.label (r, "Animation: ", *label_theme);
+		r.x += text_width;
+		defer r.x -= text_width;
+		r.w = xx (w * 0.1);
+		getrect.dropdown (
+			r,
+			animation_names,
+			*animation_index,
+			*dropdown_theme
+		);
+	}
+	r.y -= pad;
 	// Show Skeleton checkbox
 	{
 		r.w = r.h + xx simp.prepare_text (g_checkbox_font, "Show Skeleton");
 		pressed := getrect.base_checkbox (r, "Show Skeleton", show_skeleton, *checkbox_theme);
 		show_skeleton ^= pressed;
+	}
+	r.y -= pad;
+	// Show Mesh checkbox
+	{
+		r.w = r.h + xx simp.prepare_text (g_checkbox_font, "Show Mesh");
+		pressed := getrect.base_checkbox (r, "Show Mesh", show_mesh, *checkbox_theme);
+		show_mesh ^= pressed;
 	}
 	r.y -= pad;
 	// Show Animations checkbox
@@ -55,45 +103,39 @@ update_ui :: (delta_time : float)
 	r.y -= pad;
 	// Animation time slider
 	{
-		text := tprint ("Animation Time: %.00", g_anim.sample_count);
+		sample_count := 0;
+		if animation_index > 0
+		{
+			anim := table_find_pointer (*g_loaded_animations, animation_names[animation_index]);
+			sample_count = anim.sample_count;
+		}
+		text := tprint ("Animation Time: %.00", sample_count);
 		r.w = w * 0.1 + xx simp.prepare_text (g_slider_font, text);
-		getrect.slider (r, *animation_time, 0.0, xx g_anim.sample_count, 1.0, *slider_theme, "Animation Time: ", "");
+		getrect.slider (r, *animation_time, 0.0, xx sample_count, 1.0, *slider_theme, "Animation Time: ", "");
 	}
 	r.y -= pad;
 	// Interpolation mode
 	{
-		r.w = xx simp.prepare_text (g_font, "Interpolation Mode:");
-		getrect.label (r, "Interpolation Mode:", *label_theme);
-		r.y -= pad;
-		modes := string.[ "Nearest", "Linear" ];
-		TAB :: 20.0;
-		r.x += TAB;
-		for modes
-		{
-			r.w = r.h + xx simp.prepare_text (g_checkbox_font, it);
-			getrect.radio_button (r, it, *interpolation_mode, cast (Interpolation_Mode) it_index, *checkbox_theme, it_index);
-			r.y -= pad;
-		}
-		r.x -= TAB;
+		text_width := cast (float) simp.prepare_text (g_font, "Interpolation Mode: ");
+		r.w = text_width;
+		getrect.label (r, "Interpolation Mode: ", *label_theme);
+		r.x += text_width;
+		defer r.x -= text_width;
+		r.w = xx (w * 0.1);
+		getrect.dropdown (
+			r,
+			string.[ "Nearest", "Linear" ],
+			cast (*s32) *interpolation_mode,
+			*dropdown_theme
+		);
 	}
 
 	r = getrect.get_rect (k, pad, k, k);
 	{
-		TEXT :: "Use ESC to toggle camera controls, WSADEQ to move, SHIFT to speed up";
+		TEXT :: "Use ESC to toggle camera controls, WSADEQ to move, SHIFT to speed up, ALT+F4 to quit";
 		r.w = k + xx simp.prepare_text (g_font, TEXT);
 		getrect.label (r, TEXT, *label_theme);
 	}
-	/*
-	r.y += pad + r.h;
-	// Colors
-	{
-		r.w = k * 10;
-		r.h = k * 10;
-		// @Todo: make a subwindow for the color picker
-		color_picker_theme := getrect.default_overall_theme.color_picker_theme;
-		getrect.color_picker (r, *g_params.skeleton_color, *color_picker_theme);
-	}
-	*/
 
 	getrect.draw_popups ();
 }
