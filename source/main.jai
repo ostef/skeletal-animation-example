@@ -20,9 +20,6 @@ getrect :: #import "GetRect";
 #load "ui.jai";
 
 MAX_WEIGHTS :: 4;
-// We use uniform buffer objects to store the skinning data,
-// which can be up to 128KB in size, which is 2000 4x4 matrices.
-// So we can have up to 2000 joints, but let's make this 1000.
 MAX_JOINTS :: 1000;
 
 g_window : Window_Type;

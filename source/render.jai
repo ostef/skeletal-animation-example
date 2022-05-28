@@ -89,6 +89,14 @@ init_rendering_objects :: () -> bool
 		return result, true;
 	}
 
+	// Check if we can store enough data for the skinning
+	// information in a shader uniform block.
+	uniform_block_size : s32;
+	glGetIntegerv (GL_MAX_UNIFORM_BLOCK_SIZE, *uniform_block_size);
+	assert (uniform_block_size > MAX_JOINTS * size_of (Matrix4),
+		"OpenGL implementation does not allow storing more than % bytes in uniform block, but we need at least % for skinning information. Recompile with a smaller MAX_JOINTS value.",
+		uniform_block_size, MAX_JOINTS * size_of (Matrix4));
+
 	ok : bool;
 	g_mesh_shader, ok = create_shader_program (MESH_VERTEX_SHADER, MESH_FRAGMENT_SHADER);
 	if !ok
@@ -212,11 +220,12 @@ draw_pose :: (pose : Skeleton_Pose, transform : Matrix4, color : Vector4)
 		draw_joint (pose, *pose.skeleton.joints[0], transform, color);
 }
 
-MESH_VERTEX_SHADER :: #string GLSL
+MESH_VERTEX_SHADER :: #insert #run sprint (#string END
+#string GLSL
 #version 330 core
 
-const int MAX_JOINTS  = 1000;
-const int MAX_WEIGHTS = 4;
+const int MAX_JOINTS  = %1;
+const int MAX_WEIGHTS = %2;
 
 layout (location = 0) in vec3 a_Position;
 layout (location = 1) in vec3 a_Normal;
@@ -227,9 +236,9 @@ uniform mat4 u_Model_Matrix;
 uniform mat4 u_View_Projection_Matrix;
 // A simple uniform variable cannot hold a lot of data,
 // so we use a uniform block to store the skinning information.
-// The spec says a uniform block can be up to 128KB big, which
-// means we can store at most 2000 4x4 matrices. We set MAX_JOINTS
-// to 1000.
+// A uniform block can hold more data, and we check if the
+// OpenGL implementation allows us to store enough at the
+// start of the program.
 layout (std140) uniform Big_Data
 {
 	mat4 u_Skinning_Matrices[MAX_JOINTS];
@@ -264,6 +273,7 @@ void main ()
 	Normal = model_normal.xyz;
 }
 GLSL
+END, MAX_JOINTS, MAX_WEIGHTS);
 
 MESH_FRAGMENT_SHADER :: #string GLSL
 #version 330 core
