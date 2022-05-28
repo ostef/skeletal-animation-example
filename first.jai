@@ -54,6 +54,7 @@ build :: ()
 
 	if build_success
 	{
+		// @CompilerBug: crash in CopyFileW during CTE
 		//copy_directory (DATA_DIR, join (OUTPUT_DIR, DATA_DIR));
 		if run_on_success
 		{
