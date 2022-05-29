@@ -14,7 +14,7 @@ Skinned_Mesh :: struct
 	vao, vbo, ibo : GLuint;
 }
 
-#assert MAX_JOINTS < 0x7fff "MAX_JOINTS can't exceed the max of an s16, since we use that for joint ids.";
+#assert MAX_JOINTS <= 0x7fff "MAX_JOINTS can't exceed the max of an s16, since we use that for joint ids.";
 
 Skeleton :: struct
 {
