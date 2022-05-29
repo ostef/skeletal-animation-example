@@ -103,9 +103,11 @@ init_rendering_objects :: () -> bool
 		return false;
 	big_data_uniform_index := glGetUniformBlockIndex (g_mesh_shader, "Big_Data");
 	glUniformBlockBinding (g_mesh_shader, big_data_uniform_index, GL_BIG_DATA_UNIFORM_BINDING);
+
 	g_line_shader, ok = create_shader_program (LINE_VERTEX_SHADER, LINE_FRAGMENT_SHADER);
 	if !ok
 		return false;
+
 	// Create line objects
 	glGenVertexArrays (1, *g_line_vao);
 	glBindVertexArray (g_line_vao);
