@@ -5,13 +5,25 @@ g_big_data_ubo : GLuint;
 
 GL_BIG_DATA_UNIFORM_BINDING :: 0;
 
+// Used for line rendering
 Vertex_Pos_Color :: struct
 {
 	position : Vector3;
 	color : Vector4;
 }
 
-init_rendering_objects :: () -> bool
+#scope_file
+
+// In OpenGL land, we write programs in the GLSL language to
+// (usually) be executed on the GPU.
+// The 'vertex shader' is the first shader to be executed. It
+// takes as input the data for a vertex, which we define, and
+// it is responsible for transforming that vertex in any way it
+// wants (such as applying the model transform, the camera projection).
+// The 'fragment shader' is the last shader to be executed. It
+// executes per-pixel, and takes as input anything that you want,
+// and as output it gives the color of the pixel.
+create_shader_program :: (vertex_source : string, fragment_source : string) -> GLuint, bool
 {
 	check_compile_errors :: (shader : GLuint) -> bool, info_log : string
 	{
@@ -53,54 +65,66 @@ init_rendering_objects :: () -> bool
 		return true, "";
 	}
 
-	create_shader_program :: (vertex_source : string, fragment_source : string) -> GLuint, bool
+	// OpenGL requires us to create at least a vertex shader and a
+	// fragment shader, to create a shader program that it can execute.
+	vs := glCreateShader (GL_VERTEX_SHADER);
+	defer glDeleteShader (vs);
+	glShaderSource (vs, 1, *vertex_source.data, null);
+	glCompileShader (vs);
+	ok, info_log := check_compile_errors (vs);
+	if !ok
 	{
-		vs := glCreateShader (GL_VERTEX_SHADER);
-		glShaderSource (vs, 1, *vertex_source.data, null);
-		glCompileShader (vs);
-		ok, info_log := check_compile_errors (vs);
-		if !ok
-		{
-			log_error ("Could not compile vertex shader: %", info_log);
-			return 0, false;
-		}
-		fs := glCreateShader (GL_FRAGMENT_SHADER);
-		defer glDeleteShader (fs);
-		glShaderSource (fs, 1, *fragment_source.data, null);
-		glCompileShader (fs);
-		ok, info_log = check_compile_errors (fs);
-		if !ok
-		{
-			log_error ("Could not compile fragment shader: %", info_log);
-			return 0, false;
-		}
-		result := glCreateProgram ();
-		glAttachShader (result, vs);
-		glAttachShader (result, fs);
-		glLinkProgram (result);
-		ok, info_log = check_link_errors (result);
-		if !ok
-		{
-			log_error ("Could not link shader program: %", info_log);
-			glDeleteProgram (result);
-			return 0, false;
-		}
-
-		return result, true;
+		log_error ("Could not compile vertex shader: %", info_log);
+		return 0, false;
+	}
+	
+	fs := glCreateShader (GL_FRAGMENT_SHADER);
+	defer glDeleteShader (fs);
+	glShaderSource (fs, 1, *fragment_source.data, null);
+	glCompileShader (fs);
+	ok, info_log = check_compile_errors (fs);
+	if !ok
+	{
+		log_error ("Could not compile fragment shader: %", info_log);
+		return 0, false;
 	}
 
+	result := glCreateProgram ();
+	glAttachShader (result, vs);
+	glAttachShader (result, fs);
+	glLinkProgram (result);
+	ok, info_log = check_link_errors (result);
+	if !ok
+	{
+		log_error ("Could not link shader program: %", info_log);
+		glDeleteProgram (result);
+		return 0, false;
+	}
+
+	return result, true;
+}
+
+#scope_export
+
+init_rendering_objects :: () -> bool
+{
 	// Check if we can store enough data for the skinning
 	// information in a shader uniform block.
 	uniform_block_size : s32;
 	glGetIntegerv (GL_MAX_UNIFORM_BLOCK_SIZE, *uniform_block_size);
 	assert (uniform_block_size >= MAX_JOINTS * size_of (Matrix4),
-		"OpenGL implementation does not allow storing more than % bytes in uniform block, but we need at least % for skinning information. Recompile with a smaller MAX_JOINTS value.",
+		"OpenGL implementation does not allow storing more than % bytes in uniform block, but we need at least % for skinning information. Recompile the program with a smaller MAX_JOINTS value.",
 		uniform_block_size, MAX_JOINTS * size_of (Matrix4));
 
+	// Create the shader programs we will use throughout
+	// our application to render meshes and lines.
+	// The source of these programs are at the end of the file.
 	ok : bool;
 	g_mesh_shader, ok = create_shader_program (MESH_VERTEX_SHADER, MESH_FRAGMENT_SHADER);
 	if !ok
 		return false;
+	// We need to bind the block in the mesh shader to a binding point
+	// that we define to be GL_BIG_DATA_UNIFORM_BINDING
 	big_data_uniform_index := glGetUniformBlockIndex (g_mesh_shader, "Big_Data");
 	glUniformBlockBinding (g_mesh_shader, big_data_uniform_index, GL_BIG_DATA_UNIFORM_BINDING);
 
@@ -108,7 +132,8 @@ init_rendering_objects :: () -> bool
 	if !ok
 		return false;
 
-	// Create line objects
+	// Create line objects. We have a vertex buffer that we fill
+	// every time we want to draw a line.
 	glGenVertexArrays (1, *g_line_vao);
 	glBindVertexArray (g_line_vao);
 	glGenBuffers (1, *g_line_vbo);
@@ -125,11 +150,42 @@ init_rendering_objects :: () -> bool
 	// Create big data uniform buffer object
 	glGenBuffers (1, *g_big_data_ubo);
 	glBindBuffer (GL_UNIFORM_BUFFER, g_big_data_ubo);
+	// Allocate the data for the uniform buffer. This data will
+	// be filled with all the skinning matrices.
 	glBufferData (GL_UNIFORM_BUFFER, size_of (Matrix4) * MAX_JOINTS, null, GL_DYNAMIC_DRAW);
 	glBindBuffer (GL_UNIFORM_BUFFER, 0);
 	glBindBufferBase (GL_UNIFORM_BUFFER, GL_BIG_DATA_UNIFORM_BINDING, g_big_data_ubo);
 
 	return true;
+}
+
+init_mesh_rendering_objects :: (using mesh : *Skinned_Mesh)
+{
+	// OpenGL stuff... We need a vertex buffer, that holds
+	// all our vertices, and an index buffer, that holds
+	// all of our indices. We also need a vertex array, that
+	// holds the information of the layout of our vertex buffer.
+	glGenBuffers (1, *vbo);
+	glBindBuffer (GL_ARRAY_BUFFER, vbo);
+	defer glBindBuffer (GL_ARRAY_BUFFER, 0);
+	glBufferData (GL_ARRAY_BUFFER, size_of (Vertex) * vertices.count, vertices.data, GL_STATIC_DRAW);
+
+	glGenBuffers (1, *ibo);
+	glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, ibo);
+	defer glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, 0);
+	glBufferData (GL_ELEMENT_ARRAY_BUFFER, size_of (u32) * indices.count, indices.data, GL_STATIC_DRAW);
+
+	glGenVertexArrays (1, *vao);
+	glBindVertexArray (vao);
+	defer glBindVertexArray (0);
+	glEnableVertexAttribArray (0);
+	glVertexAttribPointer (0, 3, GL_FLOAT, GL_FALSE, size_of (Vertex), cast (*void) 0);
+	glEnableVertexAttribArray (1);
+	glVertexAttribPointer (1, 3, GL_FLOAT, GL_FALSE, size_of (Vertex), cast (*void) size_of (Vector3));
+	glEnableVertexAttribArray (2);
+	glVertexAttribPointer (2, 3, GL_FLOAT, GL_FALSE, size_of (Vertex), cast (*void) (2 * size_of (Vector3)));
+	glEnableVertexAttribArray (3);
+	glVertexAttribIPointer (3, 4, GL_SHORT, size_of (Vertex), cast (*void) (3 * size_of (Vector3)));
 }
 
 draw_line :: inline (start : Vector3, end : Vector3, color : Vector4)
@@ -148,6 +204,7 @@ draw_line :: (start : Vector3, end : Vector3, start_color : Vector4, end_color :
 
 	glBindVertexArray (g_line_vao);
 	glBindBuffer (GL_ARRAY_BUFFER, g_line_vbo);
+	// Fill the vertex buffer with our two line vertices
 	glBufferSubData (GL_ARRAY_BUFFER, 0, size_of (Vertex_Pos_Color) * 2, data.data);
 	glUseProgram (g_line_shader);
 	glUniformMatrix4fv (glGetUniformLocation (g_line_shader, "u_View_Projection_Matrix"), 1, GL_TRUE, *g_camera.view_projection_matrix.coef[0][0]);
@@ -158,6 +215,7 @@ draw_mesh :: (using mesh : Skinned_Mesh, model_matrix : Matrix4, skinning_matric
 {
 	assert (skinning_matrices.count <= MAX_JOINTS, "Skinning matrices array cannot have more than % elements for now.");
 
+	// Fill the uniform buffer with the skinning data
 	glBindBuffer (GL_UNIFORM_BUFFER, g_big_data_ubo);
 	glBufferSubData (GL_UNIFORM_BUFFER, 0, size_of (Matrix4) * skinning_matrices.count, skinning_matrices.data);
 	glBindBuffer (GL_UNIFORM_BUFFER, 0);
@@ -166,6 +224,7 @@ draw_mesh :: (using mesh : Skinned_Mesh, model_matrix : Matrix4, skinning_matric
 	glBindBuffer (GL_ARRAY_BUFFER, vbo);
 	glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, ibo);
 	glUseProgram (g_mesh_shader);
+
 	glUniformMatrix4fv (glGetUniformLocation (g_mesh_shader, "u_Model_Matrix"), 1, GL_TRUE, *model_matrix.coef[0][0]);
 	glUniformMatrix4fv (glGetUniformLocation (g_mesh_shader, "u_View_Projection_Matrix"), 1, GL_TRUE, *g_camera.view_projection_matrix.coef[0][0]);
 
@@ -221,6 +280,9 @@ draw_pose :: (pose : Skeleton_Pose, transform : Matrix4, color : Vector4)
 	if pose.joints.count > 0
 		draw_joint (pose, *pose.skeleton.joints[0], transform, color);
 }
+
+// Following is the vertex and fragment shaders for rendering
+// skinned meshes and lines.
 
 MESH_VERTEX_SHADER :: #insert #run sprint (#string END
 #string GLSL

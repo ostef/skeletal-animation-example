@@ -37,6 +37,8 @@ load_animation_from_file :: (anim : *Sampled_Animation, filename : string) -> bo
 	{
 		line, ok := consume_next_line (handler);
 		joint := *anim.joints.data[anim.joints.count];
+		if !ok
+			return error_out (handler, "Could not parse joint name.");
 		anim.joints.count += 1;
 		joint.name = copy_string (line);
 		joint.samples = NewArray (anim.sample_count, Joint_Sample);
@@ -44,8 +46,14 @@ load_animation_from_file :: (anim : *Sampled_Animation, filename : string) -> bo
 		{
 			sample := *joint.samples[i];
 			sample.local_position, ok = parse_vector3 (handler);
+			if !ok
+				return error_out (handler, "Could not parse joint local position.");
 			sample.local_orientation, ok = parse_quaternion (handler);
+			if !ok
+				return error_out (handler, "Could not parse joint local orientation.");
 			sample.local_scale, ok = parse_vector3 (handler);
+			if !ok
+				return error_out (handler, "Could not parse joint local scale.");
 		}
 
 		return true;
@@ -61,20 +69,25 @@ load_animation_from_file :: (anim : *Sampled_Animation, filename : string) -> bo
 	// See Text_File_Handler.do_version_number
 	handler : Text_File_Handler;
 	defer deinit (*handler);
+
 	found_slash, dir, basename := split_from_right (filename, #char "/");
 	if !found_slash
 		basename = filename;
 	start_file (*handler, basename, filename, optional = false);
 	if handler.failed
 		return false;
+
 	if handler.version != 1
 		return error_out (handler, "Invalid version number.");
+
 	joint_count, ok := parse_ident_and_int_line (*handler, "joint_count");
 	if !ok
 		return false;
+
 	anim.sample_count, ok = parse_ident_and_int_line (*handler, "sample_count");
 	if !ok
 		return false;
+
 	anim.joints.data = alloc (size_of (Joint_Animation) * joint_count);
 	memset (anim.joints.data, 0, size_of (Joint_Animation) * joint_count);
 	for i : 0..joint_count - 1
@@ -84,6 +97,7 @@ load_animation_from_file :: (anim : *Sampled_Animation, filename : string) -> bo
 	return true;
 }
 
+// Allocate a pose for a given skeleton and set it to the bind pose
 make_pose_for_skeleton :: (skeleton : *Skeleton, allocator := context.allocator) -> Skeleton_Pose #must
 {
 	result : Skeleton_Pose;
@@ -117,6 +131,28 @@ interpolate_joint_samples :: inline (
 	interpolation_mode : Interpolation_Mode
 ) -> Joint_Sample #must
 {
+	// To interpolate joints, we use linear interpolation. This is
+	// fine for translation and scale, but for orientation we have
+	// to do it a bit differently due to the way quaternions work.
+	// In short, we can only use normalized quaternions to represent
+	// rotation in 3D, so to interpolate two quaternions we use
+	// normalized linear interpolation (hence the name nlerp) which
+	// is just a normal lerp followed by normalization.
+	// There is another method of interpolation called spherical
+	// interpolation (slerp), which is slower but has benefits over
+	// nlerp that in many cases are not noticeable. To not go into too
+	// much details, here are things that you can read to understand
+	// quaternions and interpolation:
+	//     * Visualizing quaternions, an explorable video series by 3Blue1Brown:
+	//      https://eater.net/quaternions
+	//     * Foundations of Game Engine Development, Volume 1: Mathematics by Eric Lengyel
+	//     * Understanding Slerp then not using it by Jonathan Blow (the link seems dead):
+	//      http://number-none.com/product/Understanding%20Slerp,%20Then%20Not%20Using%20It/
+
+	// When interpolating two quaternions together, because it can
+	// be thought of a point on a sphere, there are at least two
+	// possible straight paths we can take. In our case, we want the
+	// shortest path so this is what the following functions do:
 	nlerp_shortest :: (a : Quaternion, b : Quaternion, t : float) -> Quaternion #must
 	{
 		first  := a;
@@ -159,25 +195,30 @@ interpolate_joint_samples :: inline (
 
 sample_animation :: (
 	using anim : Sampled_Animation,
-	time : float,
+	time_in_samples : float,
 	pose : *Skeleton_Pose,
 	interpolation_mode := Interpolation_Mode.LINEAR
 )
 {
-	time = fmod (time, cast (float) sample_count);
+	time_in_samples = fmod (time_in_samples, cast (float) sample_count);
 	for joint : joints
 	{
+		// Ideally we would be caching the results of all these
+		// hash table lookups in a flat array, but for simplicity
+		// we don't do it.
 		joint_index, ok := table_find (pose.skeleton.name_to_joint_id, joint.name);
 		if !ok
 			continue;
-		first_index  := cast (s64) time;
+		first_index  := cast (s64) time_in_samples;
 		second_index := (first_index + 1) % sample_count;
 		first  := joint.samples[first_index];
 		second := joint.samples[second_index];
 		pose.joints[joint_index].sample = interpolate_joint_samples (
 			first,
 			second,
-			time - first_index,
+			// Because time is in samples, this will result in
+			// something between 0 and 1, which is what we want
+			time_in_samples - first_index,
 			interpolation_mode
 		);
 	}

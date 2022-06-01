@@ -2,6 +2,8 @@ Vertex :: struct
 {
 	position : Vector3;
 	normal   : Vector3;
+	// We can have at most 4 weights, but they have to sum up
+	// to 1, so the last one can be calculated and we don't store it.
 	weights  : Vector3;
 	joints   : [4]s16;
 }
@@ -16,12 +18,17 @@ Skinned_Mesh :: struct
 
 #assert MAX_JOINTS <= 0x7fff "MAX_JOINTS can't exceed the max of an s16, since we use that for joint ids.";
 
+// The skeleton is separate from the mesh so that you
+// can operate on a skeleton without refering to a mesh.
 Skeleton :: struct
 {
 	Joint :: struct
 	{
 		id : s16;
+		// This is the matrix of the joint in the rest position,
+		// relative to the parent's coordinate system
 		local_\ bind_transform : Matrix4;
+		// This is the inverse of the matrix of the joint in model space
 		inverse_bind_transform : Matrix4;
 		// Here's an example of using relative pointers:
 		// With relative pointers, you can have pointers that
@@ -150,31 +157,50 @@ load_mesh_from_file :: (mesh : *Skinned_Mesh, filename : string) -> bool
 
 	handler : Text_File_Handler;
 	defer deinit (*handler);
+
 	found_slash, dir, basename := split_from_right (filename, #char "/");
 	if !found_slash then basename = filename;
 	start_file (*handler, basename, filename, optional = false);
 	if handler.failed
 		return false;
+
 	if handler.version != 1
 		return error_out (handler, "Invalid version number.");
+
 	joint_count, ok := parse_ident_and_int_line (*handler, "joint_count");
 	if !ok
 		return false;
 	if joint_count > MAX_JOINTS
 		return error_out (handler, "Too many joints (expected at most %, got %).", MAX_JOINTS, joint_count);
-	mesh.joints.data = alloc (size_of (Skeleton.Joint) * joint_count);
-	memset (mesh.joints.data, 0, size_of (Skeleton.Joint) * joint_count);
-	init (*mesh.name_to_joint_id, joint_count);
+
 	vertex_count : s64;
 	vertex_count, ok = parse_ident_and_int_line (*handler, "vertex_count");
 	if !ok
 		return false;
-	mesh.vertices.data = alloc (size_of (Vertex) * vertex_count);
+
 	triangle_count : s64;
 	triangle_count, ok = parse_ident_and_int_line (*handler, "triangle_count");
 	if !ok
 		return false;
-	mesh.indices.data = alloc (size_of (u32) * triangle_count * 3);
+
+	// We set the count of the joints, vertices and indices arrays
+	// to 0 and increment it each time we parse an element.
+	all_data := alloc (size_of (Skeleton.Joint) * joint_count
+		+ size_of (Vertex) * vertex_count
+		+ size_of (u32) * triangle_count * 3
+	);
+
+	mesh.joints.data = all_data;
+	mesh.joints.count = 0;
+	memset (mesh.joints.data, 0, size_of (Skeleton.Joint) * joint_count);
+	init (*mesh.name_to_joint_id, joint_count);
+
+	mesh.vertices.data = all_data + size_of (Skeleton.Joint) * joint_count;
+	mesh.vertices.count = 0;
+
+	mesh.indices.data = all_data + size_of (Skeleton.Joint) * joint_count + size_of (Vertex) * vertex_count;
+	mesh.indices.count = 0;
+
 	// Parse joints
 	line, found := consume_next_line (*handler);
 	if line != "joints:"
@@ -182,6 +208,7 @@ load_mesh_from_file :: (mesh : *Skinned_Mesh, filename : string) -> bool
 	for i : 0..joint_count - 1
 		if !parse_joint (*handler, mesh)
 			return false;
+
 	// Parse vertices
 	line, found = consume_next_line (*handler);
 	if line != "vertices:"
@@ -189,6 +216,7 @@ load_mesh_from_file :: (mesh : *Skinned_Mesh, filename : string) -> bool
 	for i : 0..vertex_count - 1
 		if !parse_vertex (*handler, mesh)
 			return false;
+
 	// Parse triangles
 	line, found = consume_next_line (*handler);
 	if line != "triangles:"
@@ -196,39 +224,17 @@ load_mesh_from_file :: (mesh : *Skinned_Mesh, filename : string) -> bool
 	for i : 0..triangle_count - 1
 		if !parse_triangle (*handler, mesh)
 			return false;
+
 	line, found = consume_next_line (*handler);
 	if found
 		return error_out (handler, "Expected EOF.");
-	calculate_joint_transforms (mesh);
+
+	calculate_skeleton_inverse_bind_transforms (mesh);
 
 	return true;
 }
 
-init_rendering_objects :: (using mesh : *Skinned_Mesh)
-{
-	glGenVertexArrays (1, *vao);
-	glBindVertexArray (vao);
-	glGenBuffers (1, *vbo);
-	glBindBuffer (GL_ARRAY_BUFFER, vbo);
-	glBufferData (GL_ARRAY_BUFFER, size_of (Vertex) * vertices.count, vertices.data, GL_STATIC_DRAW);
-	glGenBuffers (1, *ibo);
-	glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, ibo);
-	glBufferData (GL_ELEMENT_ARRAY_BUFFER, size_of (u32) * indices.count, indices.data, GL_STATIC_DRAW);
-	glEnableVertexAttribArray (0);
-	glVertexAttribPointer (0, 3, GL_FLOAT, GL_FALSE, size_of (Vertex), cast (*void) 0);
-	glEnableVertexAttribArray (1);
-	glVertexAttribPointer (1, 3, GL_FLOAT, GL_FALSE, size_of (Vertex), cast (*void) size_of (Vector3));
-	glEnableVertexAttribArray (2);
-	glVertexAttribPointer (2, 3, GL_FLOAT, GL_FALSE, size_of (Vertex), cast (*void) (2 * size_of (Vector3)));
-	glEnableVertexAttribArray (3);
-	glVertexAttribIPointer (3, 4, GL_SHORT, size_of (Vertex), cast (*void) (3 * size_of (Vector3)));
-
-	glBindVertexArray (0);
-	glBindBuffer (GL_ARRAY_BUFFER, 0);
-	glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, 0);
-}
-
-calculate_joint_transforms :: (using skeleton : *Skeleton)
+calculate_skeleton_inverse_bind_transforms :: (using skeleton : *Skeleton)
 {
 	calculate_for_one_joint :: (using joint : *Joint, parent_transform : Matrix4)
 	{

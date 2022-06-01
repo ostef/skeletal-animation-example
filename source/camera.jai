@@ -26,12 +26,12 @@ update_flying_camera :: (using camera : *Camera, delta_time : float)
 		mouse_delta = xy (xx mouse_delta_x, xx mouse_delta_y);
 		if is_key_down (.SHIFT) then move_speed *= 10;
 		move_speed *= delta_time;
-		move_input.x = cast (float) is_key_down (cast, no_check (Key_Code) #char "D")
-			- cast (float) is_key_down (cast, no_check (Key_Code) #char "A");
-		move_input.y = cast (float) is_key_down (cast, no_check (Key_Code) #char "E")
-			- cast (float) is_key_down (cast, no_check (Key_Code) #char "Q");
-		move_input.z = cast (float) is_key_down (cast, no_check (Key_Code) #char "S")
-			- cast (float) is_key_down (cast, no_check (Key_Code) #char "W");
+		move_input.x = cast (float) is_key_down (xx #char "D")
+			- cast (float) is_key_down (xx #char "A");
+		move_input.y = cast (float) is_key_down (xx #char "E")
+			- cast (float) is_key_down (xx #char "Q");
+		move_input.z = cast (float) is_key_down (xx #char "S")
+			- cast (float) is_key_down (xx #char "W");
 		move_input = rotate (unit_vector (move_input), rotation);
 	}
 	position += move_input * move_speed;
