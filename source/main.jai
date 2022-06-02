@@ -5,6 +5,7 @@
 // Math Matrices are row-major. In other words,
 // you have [row 0][row 1][row 2][...] in memory.
 #import "Math";
+#import "File";
 #import "File_Utilities";
 #import "GL";
 #import "Hash_Table";
@@ -352,4 +353,15 @@ decompose_transform :: inline (mat : Matrix4) -> translation : Vector3, rotation
 	);
 
 	return translation, rotation, scale;
+}
+
+#run
+{
+	#import "Compiler";
+
+	make_directory_if_it_does_not_exist ("../bin/");
+	set_build_options_dc (.{
+		output_executable_name = "anim",
+		output_path = "../bin/"
+	});
 }
