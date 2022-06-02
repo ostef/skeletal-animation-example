@@ -56,8 +56,8 @@ class Sampled_Animation:
 		):
 			for bone in pose.bones:
 				# @Note (stefan): Is it possible for a bone to
-				# spawn in the middle of an animation ? For now
-				# we don't allow this to happen.
+				# spawn in the middle of an animation ? We don't
+				# want that.
 				if bone.name not in anim.name_to_joint_id:
 					continue
 				matrix = transform_matrix @ bone.matrix

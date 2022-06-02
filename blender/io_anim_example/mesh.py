@@ -144,17 +144,10 @@ class Mesh:
 				fw (b"%.6f %.6f %.6f %.6f\n" % local_transform[1][:])
 				fw (b"%.6f %.6f %.6f %.6f\n" % local_transform[2][:])
 				fw (b"%.6f %.6f %.6f %.6f\n" % local_transform[3][:])
-				deform_child_count = 0
-				for child in joint.children:
-					if child.use_deform:
-						deform_child_count += 1
-				fw (b"%u\n" % deform_child_count)
-				for i, child in enumerate (joint.children):
-					if child.use_deform:
-						if i != 0:
-							fw (b" ")
-						fw (b"%u" % self.name_to_joint_id[child.name])
-				fw (b"\n\n")
+				if joint.parent is not None:
+					fw (b"%u\n\n" % self.name_to_joint_id[joint.parent.name])
+				else:
+					fw (b"-1\n\n")
 			fw (b"vertices:\n")
 			for vert in self.verts:
 				fw (b"%.6f %.6f %.6f\n" % vert.position)

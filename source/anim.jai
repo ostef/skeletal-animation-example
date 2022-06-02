@@ -21,6 +21,7 @@ Skeleton_Pose :: struct
 {
 	Joint :: struct
 	{
+		parent : *~s16 Joint;
 		#as using sample : Joint_Sample;
 		// This matrix is calculated right before
 		// passing it to the shader
@@ -103,6 +104,17 @@ make_pose_for_skeleton :: (skeleton : *Skeleton, allocator := context.allocator)
 	result : Skeleton_Pose;
 	result.skeleton = skeleton;
 	result.joints = NewArray (skeleton.joints.count, Skeleton_Pose.Joint, allocator = allocator);
+	for * result.joints
+	{
+		joint_in_skeleton := *skeleton.joints[it_index];
+		if joint_in_skeleton.parent
+		{
+			parent_id := joint_in_skeleton.parent - skeleton.joints.data;
+			it.parent = *result.joints[parent_id];
+		}
+		else
+			it.parent = null;
+	}
 	reset_to_bind_pose (*result);
 	return result;
 }
@@ -226,18 +238,16 @@ sample_animation :: (
 
 calculate_pose_transforms :: (using pose : *Skeleton_Pose)
 {
-	calculate_joint_transforms :: (pose : *Skeleton_Pose, skeleton_joint : *Skeleton.Joint, parent_transform : Matrix4)
+	for * joints
 	{
-		using joint_pose := *pose.joints[skeleton_joint.id];
-		local_transform := make_translation_matrix4 (local_position)
-			* make_scale_matrix4 (local_scale)
-			* rotation_matrix(Matrix4, local_orientation);
-		model_space_transform = parent_transform * local_transform;
-		for * :children skeleton_joint
-			calculate_joint_transforms (pose, it, model_space_transform);
+		local_transform := make_translation_matrix4 (it.local_position)
+			* make_scale_matrix4 (it.local_scale)
+			* rotation_matrix(Matrix4, it.local_orientation);
+		if it.parent
+			it.model_space_transform = it.parent.model_space_transform * local_transform;
+		else
+			it.model_space_transform = local_transform;
 	}
-
-	calculate_joint_transforms (pose, *skeleton.joints[0], Matrix4_Identity);
 }
 
 generate_skinning_matrices :: (using pose : *Skeleton_Pose, allocator : Allocator, transpose_result : bool) -> []Matrix4 #must

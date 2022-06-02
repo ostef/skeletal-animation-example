@@ -27,7 +27,7 @@ Skeleton :: struct
 		id : s16;
 		// This is the matrix of the joint in the rest position,
 		// relative to the parent's coordinate system
-		local_\ bind_transform : Matrix4;
+		local_bind_transform : Matrix4;
 		// This is the inverse of the matrix of the joint in model space
 		inverse_bind_transform : Matrix4;
 		// Here's an example of using relative pointers:
@@ -45,33 +45,11 @@ Skeleton :: struct
 		// a relative pointer inside an array, pointing to something that
 		// is outside that array (i.e. storing the joint's children
 		// inside an array, instead of a linked-list)
-		parent       : *~s16 Joint;
-		first_child  : *~s16 Joint;
-		//prev_sibling : *~s16 Joint;	// We don't need that one for now
-		next_sibling : *~s16 Joint;
+		parent : *~s16 Joint;
 	}
 
 	name_to_joint_id : Table (string, s16);
 	joints : []Joint;	// Root joint is joints[0]
-}
-
-// Here's an example of what is (as of now) called a for_expansion.
-// This for expansion can be used like so:
-// for :children it, it_index : skeleton_joint { ... }
-children :: (joint : *Skeleton.Joint, body : Code, flags : For_Flags) #expand
-{
-	current := joint.first_child;
-	`it_index := 0;
-	while current
-	{
-		defer current = current.next_sibling;
-		defer it_index += 1;
-		#if (flags & .POINTER) == .POINTER
-			`it := current;
-		else
-			`it := <<current;
-		#insert (remove = #assert false) body;
-	}
 }
 
 // In a real game engine, we would use binary file formats, but this
@@ -89,33 +67,23 @@ load_mesh_from_file :: (mesh : *Skinned_Mesh, filename : string) -> bool
 		table_add (*mesh.name_to_joint_id, copy_string (name), joint.id);
 		mesh.joints.count += 1;
 		joint.local_bind_transform, ok = parse_matrix4 (handler);
-		// Parse children
-		child_count : s16;
-		child_count, ok = parse_int (handler, s16);
+		// Parse parent id
+		parent_id : s16;
+		parent_id, ok = parse_int (handler, s16);
 		if !ok
 			return false;
-		if child_count > 0
+		// Set the inverse bind transform to the model space transform first.
+		// We will invert the matrices after everything has been calculated.
+		// @Robustness: We don't check if the parent_id is valid!
+		if parent_id >= 0
 		{
-			line, ok := consume_next_line (handler);
-			if !ok
-				return error_out (handler, "Unexpected EOF.");
-			current : *Skeleton.Joint;
-			for i : 0..child_count - 1
-			{
-				id : int;
-				id, ok, line = string_to_int (line);
-				if !ok || child_count < 0 || child_count >= MAX_JOINTS
-					return error_out (handler, "Expected an integer in the range [0;%).", MAX_JOINTS);
-				if i == 0
-					joint.first_child = *mesh.joints.data[id];
-				mesh.joints.data[id].parent = joint;
-				if current
-					current.next_sibling = *mesh.joints.data[id];
-				current = *mesh.joints.data[id];
-				line = trim_left (line);
-			}
-			if line.count > 0
-				return error_out (handler, "Expected end of line.");
+			joint.parent = *mesh.joints.data[parent_id];
+			joint.inverse_bind_transform = joint.parent.inverse_bind_transform * joint.local_bind_transform;
+		}
+		else
+		{
+			joint.parent = null;
+			joint.inverse_bind_transform = joint.local_bind_transform;
 		}
 
 		return true;
@@ -192,7 +160,6 @@ load_mesh_from_file :: (mesh : *Skinned_Mesh, filename : string) -> bool
 
 	mesh.joints.data = all_data;
 	mesh.joints.count = 0;
-	memset (mesh.joints.data, 0, size_of (Skeleton.Joint) * joint_count);
 	init (*mesh.name_to_joint_id, joint_count);
 
 	mesh.vertices.data = all_data + size_of (Skeleton.Joint) * joint_count;
@@ -208,6 +175,9 @@ load_mesh_from_file :: (mesh : *Skinned_Mesh, filename : string) -> bool
 	for i : 0..joint_count - 1
 		if !parse_joint (*handler, mesh)
 			return false;
+
+	for * mesh.joints
+		it.inverse_bind_transform = inverse (it.inverse_bind_transform);
 
 	// Parse vertices
 	line, found = consume_next_line (*handler);
@@ -229,21 +199,5 @@ load_mesh_from_file :: (mesh : *Skinned_Mesh, filename : string) -> bool
 	if found
 		return error_out (handler, "Expected EOF.");
 
-	calculate_skeleton_inverse_bind_transforms (mesh);
-
 	return true;
-}
-
-calculate_skeleton_inverse_bind_transforms :: (using skeleton : *Skeleton)
-{
-	calculate_for_one_joint :: (using joint : *Joint, parent_transform : Matrix4)
-	{
-		bind_transform := parent_transform * local_bind_transform;
-		inverse_bind_transform = inverse (bind_transform);
-		for * :children joint
-			calculate_for_one_joint (it, bind_transform);
-	}
-
-	if joints.count > 0
-		calculate_for_one_joint (*joints[0], Matrix4_Identity);
 }

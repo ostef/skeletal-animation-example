@@ -293,6 +293,9 @@ set_mouse_pointer_position :: inline (x : int, y : int)
 	}
 }
 
+// This is incomplete, and won't work for matrices that have shear.
+// In that case we would use a polar decomposition, so this assumes
+// your matrix does not have shear.
 decompose_transform :: inline (mat : Matrix4) -> translation : Vector3, rotation : Quaternion, scale : Vector3
 {
 	translation := xyz (
