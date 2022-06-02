@@ -38,6 +38,22 @@ g_dropdown_font : *simp.Dynamic_Font;
 // by their name).
 g_loaded_meshes : Table (string, Skinned_Mesh);
 g_loaded_animations : Table (string, Sampled_Animation);
+g_mesh : *Skinned_Mesh;
+g_pose : Skeleton_Pose;
+
+update_mesh :: (index : s64)
+{
+	free_pose (*g_pose);
+	if index == 0
+		g_mesh = null;
+	else
+	{
+		g_mesh = table_find_pointer (*g_loaded_meshes, g_params.mesh_names[index]);
+		assert (g_mesh != null);
+		g_pose = make_pose_for_skeleton (g_mesh);
+	}
+	g_params.mesh_index = xx index;
+}
 
 handle_window_event :: (event : Event)
 {
@@ -129,7 +145,7 @@ find_and_load_meshes_and_animations :: inline ()
 		i += 1;
 	}
 
-	// Start with a mesh and some animation
+	// Start the program with a mesh and some animation
 	g_params.mesh_index = xx (g_params.mesh_names.count - 1);
 	g_params.animation_index = xx (g_params.animation_names.count - 1);
 }
@@ -161,57 +177,15 @@ main :: ()
 		for events_this_frame
 			handle_window_event (it);
 
-		if !input_application_has_focus && g_control_camera
-			set_camera_control (false);
-		// Lock the cursor in the middle of the screen when controlling the camera
-		if g_control_camera
-		{
-			x, y, w, h := get_dimensions (g_window, false);
-			set_mouse_pointer_position (w / 2, h / 2);
-		}
-
-		update_flying_camera (*g_camera, delta_time);
-
-		mesh : *Skinned_Mesh;
-		if g_params.mesh_index > 0
-			mesh = table_find_pointer (*g_loaded_meshes, g_params.mesh_names[g_params.mesh_index]);
-		anim : *Sampled_Animation;
-		if g_params.animation_index > 0
-			anim = table_find_pointer (*g_loaded_animations, g_params.animation_names[g_params.animation_index]);
-
-		pose : Skeleton_Pose;
-		if mesh
-		{
-			pose = make_pose_for_skeleton (mesh, allocator = temp);
-			if anim && g_params.show_animation
-			{
-				sample_animation (
-					anim,
-					g_params.animation_time,
-					*pose,
-					g_params.interpolation_mode
-				);
-			}
-		}
-
-		if anim
-		{
-			g_params.animation_time += delta_time * g_params.animation_speed_in_fps;
-			g_params.animation_time = fmod (g_params.animation_time, xx anim.sample_count);
-		}
-		else
-			g_params.animation_time = 0;
-
-		if mesh
-			generate_skinning_matrices (*pose, transpose_result = true);
+		update_frame (delta_time);
 
 		glDepthMask (GL_TRUE);
 		glEnable (GL_DEPTH_TEST);
 		simp.update_window (g_window);
 		simp.clear_render_target (0.1, 0.1, 0.1, 1);
 		glClear (GL_DEPTH_BUFFER_BIT);
-		if mesh && g_params.show_mesh
-			draw_mesh (mesh, Matrix4_Identity, pose.skinning_matrices);
+		if g_mesh && g_params.show_mesh
+			draw_mesh (g_mesh, Matrix4_Identity, g_pose.skinning_matrices);
 		// Draw coordinate axes
 		draw_line (.{}, .{x=1}, .{x=1, w=1});
 		draw_line (.{}, .{y=1}, .{y=1, w=1});
@@ -222,13 +196,13 @@ main :: ()
 		for i : -10..10
 			draw_line (xyz (-10, 0, xx i), xyz (10, 0, xx i), .{0.4, 0.4, 0.4, 1});
 
-		if mesh && g_params.show_skeleton
+		if g_mesh && g_params.show_skeleton
 		{
 			// Disable depth mask and testing so we can see
 			// the skeleton through other things
 			glDepthMask (GL_FALSE);
 			glDisable (GL_DEPTH_TEST);
-			draw_pose (pose, Matrix4_Identity, xyzw (g_params.skeleton_color, 1));
+			draw_pose (g_pose, Matrix4_Identity, xyzw (g_params.skeleton_color, 1));
 		}
 
 		update_ui (delta_time);
@@ -238,6 +212,74 @@ main :: ()
 		frame_end := current_time_monotonic ();
 		delta_time = cast (float) to_float64_seconds (frame_end - frame_start);
 	}
+}
+
+update_frame :: (delta_time : float)
+{
+	if !input_application_has_focus && g_control_camera
+		set_camera_control (false);
+	// Lock the cursor in the middle of the screen when controlling the camera
+	if g_control_camera
+	{
+		x, y, w, h := get_dimensions (g_window, false);
+		set_mouse_pointer_position (w / 2, h / 2);
+	}
+
+	update_flying_camera (*g_camera, delta_time);
+
+	// Update the mesh if the user selected another one.
+	// Ideally we would only call table_find_pointer when we know
+	// the user selected another mesh, but I can't find a way to
+	// do that in GetRect.
+	new_mesh : *Skinned_Mesh;
+	if g_params.mesh_index == 0
+		new_mesh = null;
+	else
+		new_mesh = table_find_pointer (*g_loaded_meshes, g_params.mesh_names[g_params.mesh_index]);
+
+	if g_mesh != new_mesh
+	{
+		g_mesh = new_mesh;
+		// We changed the mesh, so reallocate a new pose
+		free_pose (*g_pose);
+		if g_mesh
+			g_pose = make_pose_for_skeleton (g_mesh);
+	}
+
+	anim : *Sampled_Animation;
+	if g_params.animation_index > 0
+		anim = table_find_pointer (*g_loaded_animations, g_params.animation_names[g_params.animation_index]);
+	else
+		anim = null;
+
+	if g_mesh
+	{
+		// We reset to the bind pose because the animation
+		// might not have all of the joints our pose has.
+		reset_to_bind_pose (*g_pose);
+		if anim && g_params.show_animation
+		{
+			sample_animation (
+				anim,
+				g_params.animation_time,
+				*g_pose,
+				g_params.interpolation_mode
+			);
+		}
+	}
+
+	// Increment animation time
+	if anim
+	{
+		g_params.animation_time += delta_time * g_params.animation_speed_in_fps;
+		g_params.animation_time = fmod (g_params.animation_time, xx anim.sample_count);
+	}
+	else
+		g_params.animation_time = 0;
+
+	// We transpose the result because OpenGL stores matrices in column-major
+	if g_mesh
+		generate_skinning_matrices (*g_pose, transpose_result = true);
 }
 
 // Things that we define ourselves but they probably should be

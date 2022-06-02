@@ -107,11 +107,11 @@ load_animation_from_file :: (anim : *Sampled_Animation, filename : string) -> bo
 }
 
 // Allocate a pose for a given skeleton and set it to the bind pose
-make_pose_for_skeleton :: (skeleton : *Skeleton, allocator := context.allocator) -> Skeleton_Pose #must
+make_pose_for_skeleton :: (skeleton : *Skeleton) -> Skeleton_Pose #must
 {
 	result : Skeleton_Pose;
 	result.skeleton = skeleton;
-	result.joints = NewArray (skeleton.joints.count, Skeleton_Pose.Joint, allocator = allocator);
+	result.joints = NewArray (skeleton.joints.count, Skeleton_Pose.Joint);
 	for * result.joints
 	{
 		joint_in_skeleton := *skeleton.joints[it_index];
@@ -124,7 +124,17 @@ make_pose_for_skeleton :: (skeleton : *Skeleton, allocator := context.allocator)
 			it.parent = null;
 	}
 	reset_to_bind_pose (*result);
+
 	return result;
+}
+
+free_pose :: (pose : *Skeleton_Pose)
+{
+	free (pose.joints.data);
+	free (pose.skinning_matrices.data);
+	pose.skeleton = null;
+	pose.joints = .[];
+	pose.skinning_matrices = .[];
 }
 
 reset_to_bind_pose :: (using pose : *Skeleton_Pose)
