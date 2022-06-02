@@ -202,9 +202,8 @@ main :: ()
 		else
 			g_params.animation_time = 0;
 
-		skinning_matrices : []Matrix4;
 		if mesh
-			skinning_matrices = generate_skinning_matrices (*pose, temp, transpose_result = true);
+			generate_skinning_matrices (*pose, transpose_result = true);
 
 		glDepthMask (GL_TRUE);
 		glEnable (GL_DEPTH_TEST);
@@ -212,7 +211,7 @@ main :: ()
 		simp.clear_render_target (0.1, 0.1, 0.1, 1);
 		glClear (GL_DEPTH_BUFFER_BIT);
 		if mesh && g_params.show_mesh
-			draw_mesh (mesh, Matrix4_Identity, skinning_matrices);
+			draw_mesh (mesh, Matrix4_Identity, pose.skinning_matrices);
 		// Draw coordinate axes
 		draw_line (.{}, .{x=1}, .{x=1, w=1});
 		draw_line (.{}, .{y=1}, .{y=1, w=1});

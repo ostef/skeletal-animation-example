@@ -28,7 +28,8 @@ Skeleton :: struct
 		// This is the matrix of the joint in the rest position,
 		// relative to the parent's coordinate system
 		local_bind_transform : Matrix4;
-		// This is the inverse of the matrix of the joint in model space
+		// This is the inverse of the matrix of the joint in model space.
+		// Why we have this matrix is explained in anim.jai:generate_skinning_matrices
 		inverse_bind_transform : Matrix4;
 		// Here's an example of using relative pointers:
 		// With relative pointers, you can have pointers that
@@ -41,10 +42,6 @@ Skeleton :: struct
 		// to each other.
 		// Here, we know we can't have more than 1000 joints, so we use
 		// 2 byte integers as pointers.
-		// A common mistake I do when using relative pointers is to have
-		// a relative pointer inside an array, pointing to something that
-		// is outside that array (i.e. storing the joint's children
-		// inside an array, instead of a linked-list)
 		parent : *~s16 Joint;
 	}
 

@@ -11,6 +11,9 @@ Joint_Animation :: struct
 	samples : []Joint_Sample;
 }
 
+// The way we store animation data is very bad for cache.
+// It would probably be better to have all the samples for
+// frame N be contiguous.
 Sampled_Animation :: struct
 {
 	sample_count : s64;
@@ -30,6 +33,9 @@ Skeleton_Pose :: struct
 
 	skeleton : *Skeleton;
 	joints : []Joint;
+	// We might want to have poses that don't generate skinning data,
+	// so this is allocated separately when generating the skinning matrices
+	skinning_matrices : []Matrix4;
 }
 
 load_animation_from_file :: (anim : *Sampled_Animation, filename : string) -> bool
@@ -41,6 +47,8 @@ load_animation_from_file :: (anim : *Sampled_Animation, filename : string) -> bo
 		if !ok
 			return error_out (handler, "Could not parse joint name.");
 		anim.joints.count += 1;
+		// We don't make sure the name does not exist already
+		// first, but let's keep this simple.
 		joint.name = copy_string (line);
 		joint.samples = NewArray (anim.sample_count, Joint_Sample);
 		for i : 0..anim.sample_count - 1
@@ -169,6 +177,12 @@ interpolate_joint_samples :: inline (
 	{
 		first  := a;
 		second := b;
+		// When thinking about the axis-angle representation of the quaternions,
+		// if the dot product is negative, that means that the axes or rotation are
+		// at least 90 degrees apart. Negating the axis and angle (the whole quaternion)
+		// makes the quaternions' axes less than 90 degrees apart in that case, without
+		// change the rotation the quaternion represents, and makes the interpolation
+		// take the shortest path.
 		if dot (first, second) < 0
 			second = negate (second);
 		
@@ -205,6 +219,9 @@ interpolate_joint_samples :: inline (
 	return result;
 }
 
+// Sample an animation info `pose', at a given time. Our implementation
+// and data layout is not very cache friendly because it reads data in a
+// lot of different places, but for this example this is fine.
 sample_animation :: (
 	using anim : Sampled_Animation,
 	time_in_samples : float,
@@ -236,6 +253,9 @@ sample_animation :: (
 	}
 }
 
+// After we've done the sampling of the animation, and maybe other
+// operations on the pose, we can calculate the pose transforms that
+// will be used to generate the skinning matrices.
 calculate_pose_transforms :: (using pose : *Skeleton_Pose)
 {
 	for * joints
@@ -250,16 +270,23 @@ calculate_pose_transforms :: (using pose : *Skeleton_Pose)
 	}
 }
 
-generate_skinning_matrices :: (using pose : *Skeleton_Pose, allocator : Allocator, transpose_result : bool) -> []Matrix4 #must
+// A skinning matrix is the difference between the bind pose and the actual pose we want,
+// or, in other words, a matrix that represents how much we need to move/rotate/scale
+// the vertices for them to go into the desired position.
+// For reference, if the pose is the same as the bind pose, that means we don't want to
+// move the vertices at all, and the model space transform and inverse bind transform
+// cancel each other out (resulting in identity matrices everywhere).
+// This is also why we use the inverse of the bind transform: you can kind of think of multiplying
+// by the inverse as taking the difference between the two coordinate spaces.
+generate_skinning_matrices :: (using pose : *Skeleton_Pose, transpose_result : bool)
 {
+	if !skinning_matrices.data
+		skinning_matrices = NewArray (joints.count, Matrix4, initialized = false);
 	calculate_pose_transforms (pose);
-	result := NewArray (joints.count, Matrix4, initialized = false, allocator = allocator);
-	for i : 0..result.count - 1
+	for i : 0..skinning_matrices.count - 1
 	{
-		result[i] = joints[i].model_space_transform * skeleton.joints[i].inverse_bind_transform;
+		skinning_matrices[i] = joints[i].model_space_transform * skeleton.joints[i].inverse_bind_transform;
 		if transpose_result
-			transpose (*result[i]);
+			transpose (*skinning_matrices[i]);
 	}
-
-	return result;
 }
