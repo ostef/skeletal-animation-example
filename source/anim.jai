@@ -1,3 +1,31 @@
+// In general, the names we use are a bit confusing because we have
+// a sampled animation that comes from your disk, and we want to
+// produce an animation on your screen. So there are terms that we
+// use in the two contexts. To try and disambiguate:
+//
+//   * a joint is in general a coordinate system that is part of a
+// hierarchy. There are different Joint structs for different contexts.
+//
+//   * a Skeleton is the set of joints forming a hierarchy. It
+// is stored in the Skinned_Mesh. The joints in it does not
+// move to produce an animation, they are just used as reference
+// to produce the final pose that you see on your screen.
+// The joint structure for this is Skeleton.Joint.
+//
+//   * a Skeleton_Pose is a snapshot of the joint hierarchy of a
+// specific Skeleton. This is used to produce the skinning information to
+// move the mesh you see on the screen.
+// The joint structure for this is Skeleton_Pose.Joint.
+//
+//   * a Sampled_Animation is a set of poses (though we don't store it that way),
+// sampled from your animation editing program.
+// This struct, contrary to a Skeleton_Pose, isn't associated to a
+// specific Skeleton, that way you can use a Sampled_Animation to apply
+// movement to a skeleton that does not have all the joints present in the
+// animation (and might have others that are not present). This is why a
+// Sampled_Animation does not have an explicitely defined hierarchy for
+// its joints, even though the joints' position/orientation/scale are expressed locally.
+
 Joint_Sample :: struct
 {
 	local_position : Vector3;
@@ -12,8 +40,9 @@ Joint_Animation :: struct
 }
 
 // The way we store animation data is very bad for cache.
-// It would probably be better to have all the samples for
-// frame N be contiguous.
+// It would probably be better to have all the joint samples
+// for each **pose** in the animation be contiguous, but we have
+// all the joint samples for each **joint** contiguous.
 Sampled_Animation :: struct
 {
 	sample_count : s64;
@@ -33,8 +62,6 @@ Skeleton_Pose :: struct
 
 	skeleton : *Skeleton;
 	joints : []Joint;
-	// We might want to have poses that don't generate skinning data,
-	// so this is allocated separately when generating the skinning matrices
 	skinning_matrices : []Matrix4;
 }
 
@@ -112,6 +139,7 @@ make_pose_for_skeleton :: (skeleton : *Skeleton) -> Skeleton_Pose #must
 	result : Skeleton_Pose;
 	result.skeleton = skeleton;
 	result.joints = NewArray (skeleton.joints.count, Skeleton_Pose.Joint);
+	
 	for * result.joints
 	{
 		joint_in_skeleton := *skeleton.joints[it_index];
@@ -123,6 +151,7 @@ make_pose_for_skeleton :: (skeleton : *Skeleton) -> Skeleton_Pose #must
 		else
 			it.parent = null;
 	}
+
 	reset_to_bind_pose (*result);
 
 	return result;
@@ -173,14 +202,14 @@ interpolate_joint_samples :: inline (
 	// nlerp that in many cases are not noticeable. To not go into too
 	// much details, here are things that you can read to understand
 	// quaternions and interpolation:
-	//     * Visualizing quaternions, an explorable video series by 3Blue1Brown:
-	//      https://eater.net/quaternions
-	//     * Foundations of Game Engine Development, Volume 1: Mathematics by Eric Lengyel
-	//     * Understanding Slerp then not using it by Jonathan Blow (the link seems dead):
-	//      http://number-none.com/product/Understanding%20Slerp,%20Then%20Not%20Using%20It/
+	//   * Visualizing quaternions, an explorable video series by 3Blue1Brown:
+	//    https://eater.net/quaternions
+	//   * Foundations of Game Engine Development, Volume 1: Mathematics by Eric Lengyel
+	//   * Understanding Slerp then not using it by Jonathan Blow (the link seems dead):
+	//    http://number-none.com/product/Understanding%20Slerp,%20Then%20Not%20Using%20It/
 
 	// When interpolating two quaternions together, because it can
-	// be thought of a point on a sphere, there are at least two
+	// be thought of a point on a sphere, there are multiple
 	// possible straight paths we can take. In our case, we want the
 	// shortest path so this is what the following functions do:
 	nlerp_shortest :: (a : Quaternion, b : Quaternion, t : float) -> Quaternion #must
@@ -191,7 +220,7 @@ interpolate_joint_samples :: inline (
 		// if the dot product is negative, that means that the axes or rotation are
 		// at least 90 degrees apart. Negating the axis and angle (the whole quaternion)
 		// makes the quaternions' axes less than 90 degrees apart in that case, without
-		// change the rotation the quaternion represents, and makes the interpolation
+		// changing the rotation the quaternion represents, and makes the interpolation
 		// take the shortest path.
 		if dot (first, second) < 0
 			second = negate (second);
@@ -229,9 +258,13 @@ interpolate_joint_samples :: inline (
 	return result;
 }
 
-// Sample an animation info `pose', at a given time. Our implementation
+// Sample an animation into `pose', at a given time. Our implementation
 // and data layout is not very cache friendly because it reads data in a
 // lot of different places, but for this example this is fine.
+// What we do is that the samples for a joint J are all contiguous,
+// but the best thing to do would probably be to have all joint samples
+// for a pose P be contiguous, and we'd iterate over all the joints in
+// the first pose, then the second pose to interpolate them.
 sample_animation :: (
 	using anim : Sampled_Animation,
 	time_in_samples : float,
@@ -265,7 +298,9 @@ sample_animation :: (
 
 // After we've done the sampling of the animation, and maybe other
 // operations on the pose, we can calculate the pose transforms that
-// will be used to generate the skinning matrices.
+// will be used to generate the skinning matrices. This is a separate
+// function from generate_skinning_matrices because we might need
+// those transforms for other purposes (though we don't in this program).
 calculate_pose_transforms :: (using pose : *Skeleton_Pose)
 {
 	for * joints
@@ -290,6 +325,7 @@ calculate_pose_transforms :: (using pose : *Skeleton_Pose)
 // by the inverse as taking the difference between the two coordinate spaces.
 generate_skinning_matrices :: (using pose : *Skeleton_Pose, transpose_result : bool)
 {
+	// The skinning matrices array isn't allocated as long as you don't call this function.
 	if !skinning_matrices.data
 		skinning_matrices = NewArray (joints.count, Matrix4, initialized = false);
 	calculate_pose_transforms (pose);
