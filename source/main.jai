@@ -42,20 +42,6 @@ g_loaded_animations : Table (string, Sampled_Animation);
 g_mesh : *Skinned_Mesh;
 g_pose : Skeleton_Pose;
 
-update_mesh :: (index : s64)
-{
-	free_pose (*g_pose);
-	if index == 0
-		g_mesh = null;
-	else
-	{
-		g_mesh = table_find_pointer (*g_loaded_meshes, g_params.mesh_names[index]);
-		assert (g_mesh != null);
-		g_pose = make_pose_for_skeleton (g_mesh);
-	}
-	g_params.mesh_index = xx index;
-}
-
 handle_window_event :: (event : Event)
 {
 	getrect.getrect_handle_event (event);
