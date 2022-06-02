@@ -9,7 +9,7 @@ g_params : struct
 	show_mesh := true;
 	show_animation := true;
 	animation_time := 0.0;	// In samples
-	animation_speed_in_fps := 30.0;
+	animation_speed_in_fps := 15.0;
 	interpolation_mode := Interpolation_Mode.LINEAR;
 };
 

@@ -7,6 +7,7 @@ from typing import (
 	Tuple
 )
 from bpy.props import (
+	IntProperty,
 	BoolProperty,
 	EnumProperty
 )
@@ -48,6 +49,7 @@ class Sampled_Animation:
 		blender_action : bpy.types.Action,
 		frame_begin : int,
 		frame_end : int,
+		frame_step : int,
 		transform_matrix : mathutils.Matrix
 	):
 		def append_pose (
@@ -94,7 +96,7 @@ class Sampled_Animation:
 			result.joints.append (joint_anim)
 			result.name_to_joint_id.update ({ bone.name : joint_index })
 		# Go through each frame in the animation and add the pose to the anim
-		for frame in range (frame_begin, frame_end):
+		for frame in range (frame_begin, frame_end, frame_step):
 			bpy.context.scene.frame_set (frame)
 			append_pose (result, blender_obj.pose)
 		bpy.context.scene.frame_set (prev_frame)
@@ -125,6 +127,7 @@ def export_animations (
 	context : bpy.types.Context,
 	filename : str,
 	use_action_frame_range : bool,
+	frame_step : int,
 	use_selection : bool,
 	apply_transform : bool,
 	axis_conversion_matrix : mathutils.Matrix
@@ -160,7 +163,7 @@ def export_animations (
 				int (context.scene.frame_start),
 				int (context.scene.frame_end)
 			)
-		anim = Sampled_Animation.from_action (obj, action, frame_begin, frame_end, transform_matrix)
+		anim = Sampled_Animation.from_action (obj, action, frame_begin, frame_end, frame_step, transform_matrix)
 		anim.write_text (output_filename)
 		print (f"Exported animation clip {action.name} to file {output_filename}.\n")
 		exported_actions.append (action)
@@ -188,6 +191,11 @@ class Exporter (bpy.types.Operator, ExportHelper):
 		description = "Use the action frame range rather than the scene frame range.",
 		default = False
 	)
+	frame_step : IntProperty (
+		name = "Frame step",
+		description = "How many frames to advance when sampling the animation.",
+		default = 1
+	)
 
 	def execute (self, context : bpy.types.Context):
 		context.window.cursor_set ('WAIT')
@@ -195,6 +203,7 @@ class Exporter (bpy.types.Operator, ExportHelper):
 			context,
 			self.filepath,
 			self.use_action_frame_range,
+			self.frame_step,
 			self.use_selection,
 			self.apply_transform,
 			axis_conversion (to_forward = self.axis_forward, to_up = self.axis_up)
