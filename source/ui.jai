@@ -20,6 +20,7 @@ update_ui :: (delta_time : float)
 	glDisable (GL_DEPTH_TEST);
 	glDepthMask (GL_FALSE);
 
+	simp.set_shader_for_color ();
 	current_time := to_float64_seconds (current_time_monotonic ());
 	w, h := simp.get_render_dimensions (g_window);
 	getrect.ui_per_frame_update (g_window, w, h, current_time);
@@ -47,7 +48,6 @@ update_ui :: (delta_time : float)
 	// Mesh selection
 	{
 		r.w = xx simp.prepare_text (g_font, "Mesh: ");
-		// GetRect bug: this label is not visible for some reason
 		getrect.label (r, "Mesh: ", *label_theme);
 		r.x += dropdown_offset;
 		defer r.x -= dropdown_offset;
