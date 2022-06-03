@@ -67,17 +67,21 @@ Skeleton_Pose :: struct
 
 load_animation_from_file :: (anim : *Sampled_Animation, filename : string) -> bool
 {
-	parse_joint :: (handler : *Text_File_Handler, anim : *Sampled_Animation) -> bool
+	parse_joint :: (
+		handler : *Text_File_Handler,
+		anim : *Sampled_Animation,
+		joint : *Joint_Animation,
+		data : *void
+	) -> bool
 	{
 		line, ok := consume_next_line (handler);
-		joint := *anim.joints.data[anim.joints.count];
 		if !ok
 			return error_out (handler, "Could not parse joint name.");
-		anim.joints.count += 1;
 		// We don't make sure the name does not exist already
 		// first, but let's keep this simple.
 		joint.name = copy_string (line);
-		joint.samples = NewArray (anim.sample_count, Joint_Sample);
+		joint.samples.data = data;
+		joint.samples.count = anim.sample_count;
 		for i : 0..anim.sample_count - 1
 		{
 			sample := *joint.samples[i];
@@ -116,7 +120,8 @@ load_animation_from_file :: (anim : *Sampled_Animation, filename : string) -> bo
 	if handler.version != 1
 		return error_out (handler, "Invalid version number.");
 
-	joint_count, ok := parse_ident_and_int_line (*handler, "joint_count");
+	ok : bool;
+	anim.joints.count, ok = parse_ident_and_int_line (*handler, "joint_count");
 	if !ok
 		return false;
 
@@ -124,11 +129,16 @@ load_animation_from_file :: (anim : *Sampled_Animation, filename : string) -> bo
 	if !ok
 		return false;
 
-	anim.joints.data = alloc (size_of (Joint_Animation) * joint_count);
-	memset (anim.joints.data, 0, size_of (Joint_Animation) * joint_count);
-	for i : 0..joint_count - 1
-		if !parse_joint (*handler, anim)
+	all_data := alloc (size_of (Joint_Animation) * anim.joints.count
+		+ size_of (Joint_Sample) * anim.sample_count * anim.joints.count);
+	anim.joints.data = all_data;
+	for * anim.joints
+	{
+		joint_data := all_data + size_of (Joint_Animation) * anim.joints.count
+			+ size_of (Joint_Sample) * anim.sample_count * it_index;
+		if !parse_joint (*handler, anim, it, joint_data)
 			return false;
+	}
 
 	return true;
 }

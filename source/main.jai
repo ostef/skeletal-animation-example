@@ -139,8 +139,10 @@ find_and_load_meshes_and_animations :: inline ()
 
 main :: ()
 {
-	g_window = create_window (1280, 720, "Skeletal Animation");
+	// This is here because on Windows, segfaults and stuff are silent.
+	// If the program ends without printing this message, then something bad happened.
 	defer print ("Program ended gracefully.\n");
+	g_window = create_window (1280, 720, "Skeletal Animation");
 	simp.set_render_target (g_window);
 	getrect.ui_init ();
 	init_fonts ();

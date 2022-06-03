@@ -54,15 +54,13 @@ Skeleton :: struct
 // a binary file format though, to show how you can load these.
 load_mesh_from_file :: (mesh : *Skinned_Mesh, filename : string) -> bool
 {
-	parse_joint :: (handler : *Text_File_Handler, mesh : *Skinned_Mesh) -> bool
+	parse_joint :: (handler : *Text_File_Handler, mesh : *Skinned_Mesh, joint : *Skeleton.Joint) -> bool
 	{
 		name, ok := consume_next_line (handler);
 		if !ok
 			return false;
-		joint := *mesh.joints.data[mesh.joints.count];
-		joint.id = xx mesh.joints.count;
+		joint.id = cast (s16) (joint - mesh.joints.data);
 		table_add (*mesh.name_to_joint_id, copy_string (name), joint.id);
-		mesh.joints.count += 1;
 		joint.local_bind_transform, ok = parse_matrix4 (handler);
 		// Parse parent id
 		parent_id : s16;
@@ -70,11 +68,12 @@ load_mesh_from_file :: (mesh : *Skinned_Mesh, filename : string) -> bool
 		if !ok
 			return false;
 		// Set the inverse bind transform to the model space transform first.
-		// We will invert the matrices after everything has been calculated.
-		// @Robustness: We don't check if the parent_id is valid!
+		// We will invert the matrices after all the joints have been parsed.
 		if parent_id >= 0
 		{
-			joint.parent = *mesh.joints.data[parent_id];
+			if parent_id >= mesh.joints.count
+				return error_out (handler, "Invalid parent joint id.");
+			joint.parent = *mesh.joints[parent_id];
 			joint.inverse_bind_transform = joint.parent.inverse_bind_transform * joint.local_bind_transform;
 		}
 		else
@@ -86,10 +85,9 @@ load_mesh_from_file :: (mesh : *Skinned_Mesh, filename : string) -> bool
 		return true;
 	}
 
-	parse_vertex :: (handler : *Text_File_Handler, mesh : *Skinned_Mesh) -> bool
+	parse_vertex :: (handler : *Text_File_Handler, mesh : *Skinned_Mesh, vertex : *Vertex) -> bool
 	{
 		ok : bool;
-		vertex : Vertex;
 		vertex.position, ok = parse_vector3 (handler);
 		if !ok
 			return false;
@@ -102,21 +100,18 @@ load_mesh_from_file :: (mesh : *Skinned_Mesh, filename : string) -> bool
 		vertex.joints, ok = parse_int_tuple (handler, 4, s16);
 		if !ok
 			return false;
-		mesh.vertices.data[mesh.vertices.count] = vertex;
-		mesh.vertices.count += 1;
 
 		return true;
 	}
 
-	parse_triangle :: (handler : *Text_File_Handler, mesh : *Skinned_Mesh) -> bool
+	parse_triangle :: (handler : *Text_File_Handler, mesh : *Skinned_Mesh, index : s64) -> bool
 	{
 		tri, ok := parse_int_tuple (handler, 3, u32);
 		if !ok
 			return false;
-		mesh.indices.data[mesh.indices.count + 0] = tri[0];
-		mesh.indices.data[mesh.indices.count + 1] = tri[1];
-		mesh.indices.data[mesh.indices.count + 2] = tri[2];
-		mesh.indices.count += 3;
+		mesh.indices[index + 0] = tri[0];
+		mesh.indices[index + 1] = tri[1];
+		mesh.indices[index + 2] = tri[2];
 		return true;
 	}
 
@@ -132,14 +127,14 @@ load_mesh_from_file :: (mesh : *Skinned_Mesh, filename : string) -> bool
 	if handler.version != 1
 		return error_out (handler, "Invalid version number.");
 
-	joint_count, ok := parse_ident_and_int_line (*handler, "joint_count");
+	ok : bool;
+	mesh.joints.count, ok = parse_ident_and_int_line (*handler, "joint_count");
 	if !ok
 		return false;
-	if joint_count > MAX_JOINTS
-		return error_out (handler, "Too many joints (expected at most %, got %).", MAX_JOINTS, joint_count);
+	if mesh.joints.count > MAX_JOINTS
+		return error_out (handler, "Too many joints (expected at most %, got %).", MAX_JOINTS, mesh.joints.count);
 
-	vertex_count : s64;
-	vertex_count, ok = parse_ident_and_int_line (*handler, "vertex_count");
+	mesh.vertices.count, ok = parse_ident_and_int_line (*handler, "vertex_count");
 	if !ok
 		return false;
 
@@ -147,32 +142,27 @@ load_mesh_from_file :: (mesh : *Skinned_Mesh, filename : string) -> bool
 	triangle_count, ok = parse_ident_and_int_line (*handler, "triangle_count");
 	if !ok
 		return false;
+	mesh.indices.count = triangle_count * 3;
 
-	// We set the count of the joints, vertices and indices arrays
-	// to 0 and increment it each time we parse an element.
-	all_data := alloc (size_of (Skeleton.Joint) * joint_count
-		+ size_of (Vertex) * vertex_count
-		+ size_of (u32) * triangle_count * 3
+	// Allocate all the data in one batch, so everything is contiguous
+	all_data := alloc (size_of (Skeleton.Joint) * mesh.joints.count
+		+ size_of (Vertex) * mesh.vertices.count
+		+ size_of (u32) * mesh.indices.count
 	);
 
-	mesh.joints.data = all_data;
-	mesh.joints.count = 0;
-	init (*mesh.name_to_joint_id, joint_count);
-
-	mesh.vertices.data = all_data + size_of (Skeleton.Joint) * joint_count;
-	mesh.vertices.count = 0;
-
-	mesh.indices.data = all_data + size_of (Skeleton.Joint) * joint_count + size_of (Vertex) * vertex_count;
-	mesh.indices.count = 0;
-
+	init (*mesh.name_to_joint_id, mesh.joints.count);
+	mesh.joints.data   = all_data;
+	mesh.vertices.data = cast (*Vertex) (mesh.joints.data + mesh.joints.count);
+	mesh.indices.data  = cast (*u32) (mesh.vertices.data + mesh.vertices.count);
+	
 	// Parse joints
 	line, found := consume_next_line (*handler);
 	if line != "joints:"
 		return error_out (handler, "Expected 'joints:', got '%' instead.", line);
-	for i : 0..joint_count - 1
-		if !parse_joint (*handler, mesh)
-			return false;
-
+	for * mesh.joints
+		if !parse_joint (*handler, mesh, it)
+			return error_out (handler, "Could not parse joint %.", it_index);
+	// Inverse all the bind transforms we calculated while parsing the joints
 	for * mesh.joints
 		it.inverse_bind_transform = inverse (it.inverse_bind_transform);
 
@@ -180,17 +170,17 @@ load_mesh_from_file :: (mesh : *Skinned_Mesh, filename : string) -> bool
 	line, found = consume_next_line (*handler);
 	if line != "vertices:"
 		return error_out (handler, "Expected 'vertices:', got '%' instead.", line);
-	for i : 0..vertex_count - 1
-		if !parse_vertex (*handler, mesh)
-			return false;
+	for * mesh.vertices
+		if !parse_vertex (*handler, mesh, it)
+			return error_out (handler, "Could not parse vertex %.", it_index);
 
 	// Parse triangles
 	line, found = consume_next_line (*handler);
 	if line != "triangles:"
 		return error_out (handler, "Expected 'triangles:', got '%' instead.", line);
 	for i : 0..triangle_count - 1
-		if !parse_triangle (*handler, mesh)
-			return false;
+		if !parse_triangle (*handler, mesh, i * 3)
+			return error_out (handler, "Could not parse triangle %.", i);
 
 	line, found = consume_next_line (*handler);
 	if found

@@ -66,7 +66,7 @@ parse_int_tuple :: (handler : *Text_File_Handler, $count : int, $Int_Type := s64
 		val : s64;
 		val, ok, line = string_to_int (line);
 		if !ok
-			return result, error_out (handler, "Expected an integer for %th component of % tuple[%].", i, Int_Type, count);
+			return result, error_out (handler, "Expected an integer for component % of % tuple[%].", i, Int_Type, count);
 		// @Cleanup: This will fail if the integer is out of bounds, but
 		// we probably should check for overflow ourselves
 		result[i] = xx val;
@@ -88,7 +88,7 @@ parse_float_tuple :: (handler : *Text_File_Handler, $count : int) -> [count]floa
 	{
 		result[i], ok, line = string_to_float (line);
 		if !ok
-			return result, error_out (handler, "Expected a floating point number for %th component of float tuple[%].", i, count);
+			return result, error_out (handler, "Expected a floating point number for component % of float tuple[%], got '%'.", i, count, line);
 		line = trim_left (line);
 	}
 	if line.count > 0
