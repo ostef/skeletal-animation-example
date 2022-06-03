@@ -14,11 +14,11 @@
 //
 //   * a Skeleton_Pose is a snapshot of the joint hierarchy of a
 // specific Skeleton. This is used to produce the skinning information to
-// move the mesh you see on the screen.
+// move the mesh you see on the screen and uses a Skeleton for reference.
 // The joint structure for this is Skeleton_Pose.Joint.
 //
 //   * a Sampled_Animation is a set of poses (though we don't store it that way),
-// sampled from your animation editing program.
+// sampled from your animation editing program most of the time.
 // This struct, contrary to a Skeleton_Pose, isn't associated to a
 // specific Skeleton, that way you can use a Sampled_Animation to apply
 // movement to a skeleton that does not have all the joints present in the
@@ -55,8 +55,8 @@ Skeleton_Pose :: struct
 	{
 		parent : *~s16 Joint;
 		#as using sample : Joint_Sample;
-		// This matrix is calculated right before
-		// passing it to the shader
+		// This is the transform matrix of the Joint in model space.
+		// It is used for skinning matrices generation.
 		model_space_transform := Matrix4_Identity;
 	}
 
