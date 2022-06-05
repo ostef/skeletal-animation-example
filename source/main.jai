@@ -71,8 +71,7 @@ set_camera_control :: inline (control : bool)
 		show_cursor ();
 }
 
-// Simp also has an init_fonts routine, but it's fine to define
-// our own because we namespace the module when importing it!
+reinit_fonts :: init_fonts;
 init_fonts :: ()
 {
 	// I want a pixel size of 20 with a window height of 720 => 720 / 36 = 20
@@ -187,7 +186,7 @@ main :: ()
 			{
 				g_current_window_width = it.width;
 				g_current_window_height = it.height;
-				init_fonts ();
+				reinit_fonts ();	// We want the fonts to scale with the window
 			}
 		}
 		for events_this_frame
