@@ -24,6 +24,7 @@ MAX_WEIGHTS :: 4;
 MAX_JOINTS :: 1000;
 
 g_window : Window_Type;
+g_current_window_width, g_current_window_height : s32;
 g_camera : Camera;
 g_running : bool;
 g_control_camera : bool;
@@ -73,11 +74,15 @@ set_camera_control :: inline (control : bool)
 // our own because we namespace the module when importing it!
 init_fonts :: ()
 {
-	g_font = simp.get_font_at_size ("data/fonts", "OpenSans-Regular.ttf", 20);
+	// I want a pixel size of 20 with a window height of 720 => 720 / 36 = 20
+	pixel_height := g_current_window_height / 36;
+	g_font = simp.get_font_at_size ("data/fonts", "OpenSans-Regular.ttf", pixel_height);
 	assert (g_font != null);
-	g_checkbox_font = simp.get_font_at_size ("data/fonts", "OpenSans-Regular.ttf", 18);
+	pixel_height = g_current_window_height / 40;
+	g_checkbox_font = simp.get_font_at_size ("data/fonts", "OpenSans-Regular.ttf", pixel_height);
 	assert (g_checkbox_font != null);
-	g_slider_font = simp.get_font_at_size ("data/fonts", "OpenSans-Italic.ttf", 16);
+	pixel_height = g_current_window_height / 45;
+	g_slider_font = simp.get_font_at_size ("data/fonts", "OpenSans-Italic.ttf", pixel_height);
 	assert (g_slider_font != null);
 	g_dropdown_font = g_slider_font;
 }
@@ -142,6 +147,13 @@ main :: ()
 	// This is here because on Windows, segfaults and stuff are silent.
 	// If the program ends without printing this message, then something bad happened.
 	defer print ("Program ended gracefully.\n");
+
+	#if OS == .WINDOWS
+	{
+		win32 :: #import "Windows";
+		win32.SetProcessDPIAware ();
+	}
+
 	g_window = create_window (1280, 720, "Skeletal Animation");
 	simp.set_render_target (g_window);
 	getrect.ui_init ();
@@ -163,6 +175,16 @@ main :: ()
 		frame_start := current_time_monotonic ();
 		reset_temporary_storage ();
 		update_window_events ();
+		for get_window_resizes ()
+		{
+			if it.window == g_window
+			&& g_current_window_width != it.width && g_current_window_height != it.height
+			{
+				g_current_window_width = it.width;
+				g_current_window_height = it.height;
+				init_fonts ();
+			}
+		}
 		for events_this_frame
 			handle_window_event (it);
 
