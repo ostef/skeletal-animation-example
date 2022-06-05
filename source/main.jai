@@ -7,6 +7,7 @@
 #import "Math";
 #import "File";
 #import "File_Utilities";
+#import "System";
 #import "GL";
 #import "Hash_Table";
 
@@ -153,6 +154,10 @@ main :: ()
 		win32 :: #import "Windows";
 		win32.SetProcessDPIAware ();
 	}
+
+	// Set the working directory so we can access the data folder
+	executable_path := path_strip_filename (get_path_of_running_executable ());
+	set_working_directory (executable_path);
 
 	g_window = create_window (1280, 720, "Skeletal Animation");
 	simp.set_render_target (g_window);
