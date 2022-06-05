@@ -37,7 +37,7 @@ update_ui :: (delta_time : float)
 	dropdown_theme.theme_for_each_choice.font = g_dropdown_font;
 	dropdown_theme.theme_for_current_choice.font = g_dropdown_font;
 
-	k := 16.0;
+	k := g_current_window_height / 45.0;
 	pad := cast (float) g_font.character_height * 1.6;
 	dropdown_offset := w * 0.2;
 	dropdown_width  := w * 0.1;
