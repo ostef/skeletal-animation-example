@@ -222,7 +222,7 @@ main :: ()
 
 		update_ui (delta_time);
 
-		swap_buffers (g_window);
+		simp.swap_buffers (g_window);
 		sleep_milliseconds (10);
 		frame_end := current_time_monotonic ();
 		delta_time = cast (float) to_float64_seconds (frame_end - frame_start);

@@ -288,7 +288,7 @@ sample_animation :: (
 		// Ideally we would be caching the results of all these
 		// hash table lookups in a flat array, but for simplicity
 		// we don't do it.
-		joint_index, ok := table_find (pose.skeleton.name_to_joint_id, joint.name);
+		joint_index, ok := table_find (*pose.skeleton.name_to_joint_id, joint.name);
 		if !ok
 			continue;
 		first_index  := cast (s64) time_in_samples;
