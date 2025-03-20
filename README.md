@@ -1,3 +1,5 @@
+### Disclaimer: this is an old version of the program that surely does not compile with the latest compiler versions
+
 Compile with jai source\main.jai, the resulting exe will be in
 the bin folder, under the name anim.exe.
 
